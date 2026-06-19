@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
-import { Bell, Search, Filter, MessageCircle, Mail, LayoutDashboard, Users, Settings, LogOut, Briefcase, Plus, X, BarChart3, Copy, BookOpen, Edit2, Link } from 'lucide-react';
+import { Bell, Search, MessageCircle, Mail, LayoutDashboard, Users, Settings, LogOut, Briefcase, Plus, X, BarChart3, Copy, BookOpen, Edit2, Link } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -95,7 +95,7 @@ function Dashboard() {
   const [showNotifications, setShowNotifications] = useState(false);
   
   // Library State
-  const [libraryLinks, setLibraryLinks] = useState([
+  const [libraryLinks] = useState([
     { id: 1, title: 'Presentación Premium', type: 'doc', url: '#' },
     { id: 2, title: 'Manejo de Objeciones', type: 'chat', url: '#' },
     { id: 3, title: 'Carpeta Drive Completa', type: 'folder', url: '#' }
@@ -211,6 +211,26 @@ function Dashboard() {
       nota: 'Se abrió chat de WhatsApp'
     }]);
     loadTimeline(lead.id_lead);
+  };
+
+  const copyTemplate = async (template: any) => {
+    if (!selectedLead) return;
+    const body = template.body
+      .replace('{nombre}', selectedLead.nombre_completo)
+      .replace('{empresa}', selectedLead.empresa || 'tu empresa')
+      .replace('{dolor}', selectedLead.dolor_identificado || 'tus procesos');
+    
+    navigator.clipboard.writeText(`Asunto: ${template.subject}\n\n${body}`);
+    setShowTemplatesModal(false);
+    alert('¡Plantilla copiada al portapapeles!');
+
+    await supabase.from('historial_interacciones').insert([{
+      id_lead: selectedLead.id_lead,
+      id_usuario: session.user.id,
+      tipo_accion: 'Email n8n',
+      nota: `Se copió la plantilla: ${template.name}`
+    }]);
+    loadTimeline(selectedLead.id_lead);
   };
 
   // Filtramos leads según la pestaña activa
@@ -385,7 +405,7 @@ function Dashboard() {
                       cursor: 'pointer',
                       borderColor: selectedLead?.id_lead === lead.id_lead ? 'var(--accent-color)' : 'var(--glass-border)'
                     }}
-                    onClick={() => setActiveTab('bandeja') && setSelectedLead(lead)}
+                    onClick={() => { setActiveTab('bandeja'); setSelectedLead(lead); }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                       <span className={`badge ${getTierColor(lead.temperatura_tier)}`}>{lead.temperatura_tier}</span>
