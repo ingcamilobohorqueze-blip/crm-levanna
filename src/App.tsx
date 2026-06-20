@@ -93,7 +93,9 @@ function Dashboard() {
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [showLibraryModal, setShowLibraryModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editFormData, setEditFormData] = useState({ nombre_completo: '', empresa: '', telefono_whatsapp: '', correo_electronico: '' });
+    
   // Library State
   const [libraryLinks] = useState([
     { id: 1, title: 'Presentación Premium', type: 'doc', url: '#' },
@@ -231,6 +233,27 @@ function Dashboard() {
       nota: `Se copió la plantilla: ${template.name}`
     }]);
     loadTimeline(selectedLead.id_lead);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedLead) return;
+    const { error } = await supabase.from('leads_master').update(editFormData).eq('id_lead', selectedLead.id_lead);
+    if (!error) {
+      const updatedLead = { ...selectedLead, ...editFormData };
+      setSelectedLead(updatedLead);
+      setLeads(leads.map(l => l.id_lead === updatedLead.id_lead ? updatedLead : l));
+      setShowEditModal(false);
+      
+      await supabase.from('historial_interacciones').insert([{
+        id_lead: updatedLead.id_lead,
+        id_usuario: session.user.id,
+        tipo_accion: 'Actualización',
+        nota: 'Se actualizaron los datos de contacto/empresa del lead.'
+      }]);
+      loadTimeline(updatedLead.id_lead);
+    } else {
+      alert('Error guardando cambios');
+    }
   };
 
   // Filtramos leads según la pestaña activa
@@ -445,8 +468,17 @@ function Dashboard() {
                 <div className="animate-fade-in">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
                     <div>
-                      <h2 style={{ fontSize: '1.8rem', marginBottom: '0.5rem' }}>{selectedLead.nombre_completo}</h2>
-                      <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', margin: 0 }}>{selectedLead.empresa || 'Individual'}</p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                        <h2 style={{ fontSize: '1.8rem', margin: 0 }}>{selectedLead.nombre_completo}</h2>
+                        <button 
+                          onClick={() => { setEditFormData({ nombre_completo: selectedLead.nombre_completo, empresa: selectedLead.empresa || '', telefono_whatsapp: selectedLead.telefono_whatsapp || '', correo_electronico: selectedLead.correo_electronico || '' }); setShowEditModal(true); }} 
+                          style={{ background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', padding: '0.4rem', borderRadius: '6px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                          title="Editar información"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                      </div>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', margin: 0 }}>{selectedLead.empresa || 'Individual / Sin empresa'}</p>
                     </div>
                     
                     <select 
@@ -533,6 +565,34 @@ function Dashboard() {
       </main>
 
       {/* Modal Plantillas */}
+      {showEditModal && selectedLead && (
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal-content animate-fade-in" onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setShowEditModal(false)}><X size={24} /></button>
+            <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Edit2 size={24} color="var(--accent-color)"/> Editar Lead</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Nombre Completo</label>
+                <input type="text" value={editFormData.nombre_completo} onChange={e => setEditFormData({...editFormData, nombre_completo: e.target.value})} style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'var(--bg-primary)', color: '#fff' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Empresa</label>
+                <input type="text" value={editFormData.empresa} onChange={e => setEditFormData({...editFormData, empresa: e.target.value})} placeholder="Ej. Levanna DC" style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'var(--bg-primary)', color: '#fff' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Teléfono / WhatsApp</label>
+                <input type="text" value={editFormData.telefono_whatsapp} onChange={e => setEditFormData({...editFormData, telefono_whatsapp: e.target.value})} style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'var(--bg-primary)', color: '#fff' }} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Correo Electrónico</label>
+                <input type="email" value={editFormData.correo_electronico} onChange={e => setEditFormData({...editFormData, correo_electronico: e.target.value})} style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'var(--bg-primary)', color: '#fff' }} />
+              </div>
+              <button onClick={handleSaveEdit} style={{ padding: '0.75rem', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '6px', marginTop: '1rem', fontWeight: 'bold' }}>Guardar Cambios</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showTemplatesModal && selectedLead && (
         <div className="modal-overlay" onClick={() => setShowTemplatesModal(false)}>
           {/* ... Modal content for templates ... */}
