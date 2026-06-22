@@ -15,7 +15,26 @@ function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,6 +88,12 @@ function Login() {
           <button type="submit" disabled={loading} style={{ width: '100%', padding: '0.75rem', marginTop: '1rem', background: 'var(--accent-color)', color: '#fff', border: 'none' }}>
             {loading ? 'Ingresando...' : 'Iniciar Sesión'}
           </button>
+          
+          {deferredPrompt && (
+            <button type="button" onClick={handleInstallClick} style={{ width: '100%', padding: '0.75rem', marginTop: '0.5rem', background: 'transparent', color: 'var(--text-secondary)', border: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+              ⬇️ Instalar App (Windows / Android)
+            </button>
+          )}
         </form>
       </div>
     </div>
