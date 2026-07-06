@@ -11,10 +11,10 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'logo.png', 'logo-white.png'],
       manifest: {
         name: 'CRM Levanna',
-        short_name: 'Levanna',
+        short_name: 'CRM Levanna',
         description: 'CRM Comercial para gestión de leads y ventas',
-        theme_color: '#08060d',
-        background_color: '#08060d',
+        theme_color: '#ffffff',
+        background_color: '#ffffff',
         display: 'standalone',
         icons: [
           {
