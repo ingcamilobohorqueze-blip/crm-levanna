@@ -158,7 +158,10 @@ function Dashboard() {
   }, [selectedLead, activeTab]);
 
   const checkUserRole = async (userId: string) => {
-    const { data } = await supabase.from('usuarios_comerciales').select('rol, nombre').eq('id_usuario', userId).single();
+    const { data, error } = await supabase.from('usuarios_comerciales').select('rol, nombre').eq('id_usuario', userId).single();
+    if (error) {
+      alert(`Error cargando usuario: ${error.message}. UUID: ${userId}`);
+    }
     if (data) {
       setUserRole(data.rol);
       setUserAlias(data.nombre);
@@ -178,6 +181,9 @@ function Dashboard() {
     console.log('Fetching leads from Supabase...');
     const { data, error } = await supabase.from('leads_master').select(`*, usuarios_comerciales(nombre)`).order('created_at', { ascending: false });
     console.log('Leads fetched:', data, 'Error:', error);
+    if (error) {
+      alert(`Error cargando leads: ${error.message}`);
+    }
     if (data && !error) {
       setLeads(data);
       if (data.length > 0 && !selectedLead) setSelectedLead(data[0]);
