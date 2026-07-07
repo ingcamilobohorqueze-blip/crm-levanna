@@ -144,6 +144,7 @@ function Dashboard() {
       else {
         setSession(session);
         await checkUserRole(session.user.id);
+        loadLeads();
       }
     });
 
@@ -174,7 +175,9 @@ function Dashboard() {
   };
 
   const loadLeads = async () => {
+    console.log('Fetching leads from Supabase...');
     const { data, error } = await supabase.from('leads_master').select(`*, usuarios_comerciales(nombre)`).order('created_at', { ascending: false });
+    console.log('Leads fetched:', data, 'Error:', error);
     if (data && !error) {
       setLeads(data);
       if (data.length > 0 && !selectedLead) setSelectedLead(data[0]);
@@ -187,7 +190,14 @@ function Dashboard() {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      localStorage.clear(); // Force clear tokens if supabase is stuck
+      window.location.href = '/login'; // Hard redirect
+    }
   };
 
   const getTierColor = (tier: string) => {
@@ -325,12 +335,12 @@ function Dashboard() {
 
         <div style={{ padding: '1.5rem 1rem', borderTop: '1px solid var(--glass-border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-            <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {userAlias.charAt(0)}
+            <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase' }}>
+              {userAlias ? userAlias.charAt(0) : '?'}
             </div>
-            {userAlias} ({userRole})
+            {userAlias || 'Usuario Desconectado'} {userRole ? `(${userRole})` : ''}
           </div>
-          <button onClick={handleLogout} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: 'transparent', border: '1px solid var(--glass-border)' }}>
+          <button onClick={handleLogout} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: 'transparent', border: '1px solid var(--glass-border)', padding: '0.5rem', borderRadius: '8px', cursor: 'pointer', color: 'var(--text-primary)' }}>
             <LogOut size={16} /> Salir
           </button>
         </div>
