@@ -1,7 +1,7 @@
 Add-Type -AssemblyName System.Drawing
-$src = [System.Drawing.Image]::FromFile('public\logo-white.png')
+$src = [System.Drawing.Image]::FromFile('public\logo-blue.png')
 
-$bgColor = [System.Drawing.Color]::FromArgb(255, 8, 6, 13)
+$bgColor = [System.Drawing.Color]::FromArgb(255, 255, 255, 255)
 
 $bmp1 = New-Object System.Drawing.Bitmap 192, 192
 $g1 = [System.Drawing.Graphics]::FromImage($bmp1)
@@ -28,5 +28,13 @@ $g2.DrawImage($src, $x2, $y2, $newW2, $newH2)
 $bmp2.Save('public\pwa-512x512.png', [System.Drawing.Imaging.ImageFormat]::Png)
 $g2.Dispose()
 $bmp2.Dispose()
+
+$bmp3 = New-Object System.Drawing.Bitmap 512, 512
+$g3 = [System.Drawing.Graphics]::FromImage($bmp3)
+$g3.Clear($bgColor)
+$g3.DrawImage($src, $x2, $y2, $newW2, $newH2)
+$bmp3.Save('public\logo.png', [System.Drawing.Imaging.ImageFormat]::Png)
+$g3.Dispose()
+$bmp3.Dispose()
 
 $src.Dispose()

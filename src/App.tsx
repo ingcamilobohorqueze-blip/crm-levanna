@@ -55,7 +55,7 @@ function Login() {
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '1rem' }}>
       <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '400px', padding: '3rem 2rem' }}>
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <img src="/logo-white.png" alt="CRM Logo" style={{ width: '80px', marginBottom: '1rem' }} />
+          <img src="/logo-blue.png" alt="CRM Logo" style={{ width: '80px', marginBottom: '1rem' }} />
           <h2>CRM Comercial</h2>
           <p style={{ color: 'var(--text-secondary)' }}>Ingresa tus credenciales para continuar</p>
         </div>
@@ -309,7 +309,7 @@ function Dashboard() {
       {/* Sidebar */}
       <aside className="sidebar">
         <div style={{ padding: '2rem 1.5rem', borderBottom: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <img src="/logo-white.png" alt="CRM Logo" style={{ width: '40px', height: '40px', objectFit: 'contain' }} onError={(e) => e.currentTarget.style.display = 'none'} />
+          <img src="/logo-blue.png" alt="CRM Logo" style={{ width: '40px', height: '40px', objectFit: 'contain' }} onError={(e) => e.currentTarget.style.display = 'none'} />
           <h2 style={{ color: 'var(--text-primary)', margin: 0, fontSize: '1.2rem' }}>CRM Levanna</h2>
         </div>
         

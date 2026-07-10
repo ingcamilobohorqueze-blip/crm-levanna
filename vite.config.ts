@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'logo.png', 'logo-white.png'],
+      includeAssets: ['favicon.svg', 'logo.png', 'logo-blue.png'],
       manifest: {
         name: 'CRM Levanna',
         short_name: 'CRM Levanna',
