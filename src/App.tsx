@@ -123,9 +123,10 @@ function Dashboard() {
     
   // Library State
   const [libraryLinks] = useState([
-    { id: 1, title: 'Presentación Premium', type: 'doc', url: '#' },
-    { id: 2, title: 'Manejo de Objeciones', type: 'chat', url: '#' },
-    { id: 3, title: 'Carpeta Drive Completa', type: 'folder', url: '#' }
+    { id: 1, title: 'Generador de propuestas', type: 'doc', url: 'https://levanna-tenant-hub-hub.vercel.app/cotizador_comercial.html' },
+    { id: 2, title: 'Presentación Premium', type: 'doc', url: '#' },
+    { id: 3, title: 'Manejo de Objeciones', type: 'chat', url: '#' },
+    { id: 4, title: 'Carpeta Drive Completa', type: 'folder', url: '#' }
   ]);
 
   useEffect(() => {
