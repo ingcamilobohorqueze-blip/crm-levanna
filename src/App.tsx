@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
-import { Bell, Search, MessageCircle, Mail, LayoutDashboard, Users, Settings, LogOut, Briefcase, Plus, X, BarChart3, Copy, BookOpen, Edit2, Link } from 'lucide-react';
+import { Bell, Search, MessageCircle, Mail, LayoutDashboard, Users, Settings, LogOut, Briefcase, Plus, X, BarChart3, Copy, BookOpen, Edit2, Link, UserPlus, Share2 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -120,7 +120,22 @@ function Dashboard() {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editFormData, setEditFormData] = useState({ nombre_completo: '', empresa: '', telefono_whatsapp: '', correo_electronico: '' });
-    
+  
+  // Inyección de Lead State
+  const [showInjectModal, setShowInjectModal] = useState(false);
+  const [injecting, setInjecting] = useState(false);
+  const [injectFormData, setInjectFormData] = useState({
+    nombre_completo: '',
+    empresa: '',
+    telefono_whatsapp: '',
+    correo_electronico: '',
+    origen_captura: 'Contacto_Directo',
+    temperatura_tier: 'HOT',
+    estado_comercial: 'Propuesta_Enviada',
+    comercial_asignado: '',
+    dolor_identificado: ''
+  });
+
   // Library State
   const [libraryLinks] = useState([
     { id: 1, title: 'Generador de propuestas', type: 'doc', url: 'https://levanna-tenant-hub-hub.vercel.app/cotizador_comercial.html' },
@@ -136,6 +151,7 @@ function Dashboard() {
       } else {
         setSession(session);
         await checkUserRole(session.user.id);
+        loadAsesores();
         loadLeads();
       }
     });
@@ -145,6 +161,7 @@ function Dashboard() {
       else {
         setSession(session);
         await checkUserRole(session.user.id);
+        loadAsesores();
         loadLeads();
       }
     });
@@ -168,14 +185,104 @@ function Dashboard() {
       setUserAlias(data.nombre);
       if (data.rol === 'admin') {
         setActiveTab('admin');
-        loadAsesores();
       }
     }
   };
 
   const loadAsesores = async () => {
-    const { data } = await supabase.from('usuarios_comerciales').select('*').eq('rol', 'asesor');
+    const { data } = await supabase.from('usuarios_comerciales').select('*').eq('activo', true);
     if (data) setAsesores(data);
+  };
+
+  const openInjectModal = () => {
+    setInjectFormData({
+      nombre_completo: '',
+      empresa: '',
+      telefono_whatsapp: '',
+      correo_electronico: '',
+      origen_captura: 'Contacto_Directo',
+      temperatura_tier: 'HOT',
+      estado_comercial: 'Propuesta_Enviada',
+      comercial_asignado: session?.user?.id || '',
+      dolor_identificado: 'Cliente de propuesta directa / contacto externo'
+    });
+    setShowInjectModal(true);
+  };
+
+  const handleInjectLead = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!injectFormData.nombre_completo || !injectFormData.telefono_whatsapp) {
+      alert('Por favor completa el nombre completo y el teléfono / WhatsApp.');
+      return;
+    }
+    setInjecting(true);
+    try {
+      // Intentar primero RPC upsert_lead si está desplegada la última versión
+      const { error: rpcErr } = await supabase.rpc('upsert_lead', {
+        p_nombre: injectFormData.nombre_completo,
+        p_telefono: injectFormData.telefono_whatsapp,
+        p_correo: injectFormData.correo_electronico || null,
+        p_empresa: injectFormData.empresa || null,
+        p_origen: injectFormData.origen_captura,
+        p_dolor: injectFormData.dolor_identificado || 'Inyección manual desde el CRM',
+        p_terminos_aceptados: true,
+        p_comercial_id: injectFormData.comercial_asignado || session?.user?.id,
+        p_estado_inicial: injectFormData.estado_comercial
+      });
+
+      if (rpcErr) {
+        console.warn('Invocando inserción directa como respaldo por RPC:', rpcErr);
+        // Respaldo de inserción directa a la tabla leads_master
+        const { data: insertedLead, error: insErr } = await supabase.from('leads_master').insert([{
+          nombre_completo: injectFormData.nombre_completo,
+          empresa: injectFormData.empresa || null,
+          telefono_whatsapp: injectFormData.telefono_whatsapp,
+          correo_electronico: injectFormData.correo_electronico || null,
+          origen_captura: injectFormData.origen_captura,
+          temperatura_tier: injectFormData.temperatura_tier,
+          estado_comercial: injectFormData.estado_comercial,
+          comercial_asignado: injectFormData.comercial_asignado || session?.user?.id,
+          dolor_identificado: injectFormData.dolor_identificado || 'Cliente inyectado manualmente',
+          terminos_aceptados: true
+        }]).select().single();
+
+        if (insErr) throw insErr;
+
+        if (insertedLead) {
+          await supabase.from('historial_interacciones').insert([{
+            id_lead: insertedLead.id_lead,
+            id_usuario: session?.user?.id,
+            tipo_accion: 'Inyección Manual',
+            nota: `Cliente inyectado manualmente por ${userAlias} con origen ${injectFormData.origen_captura}.`
+          }]);
+        }
+      }
+
+      const comercialNombre = asesores.find(a => a.id_usuario === injectFormData.comercial_asignado)?.nombre || userAlias;
+      alert(`¡Cliente "${injectFormData.nombre_completo}" inyectado con éxito en la base de datos! Asignado a: ${comercialNombre}`);
+      setShowInjectModal(false);
+      await loadLeads();
+    } catch (err: any) {
+      alert(`Error al inyectar el cliente: ${err.message || err}`);
+    } finally {
+      setInjecting(false);
+    }
+  };
+
+  const copyTrackableLink = (linkUrl: string, linkTitle: string) => {
+    const currentAdvisorId = session?.user?.id || '';
+    const currentAdvisorName = userAlias || 'Asesor';
+    
+    if (!linkUrl || linkUrl === '#') {
+      alert('Este recurso no posee una URL externa configurada.');
+      return;
+    }
+
+    const separator = linkUrl.includes('?') ? '&' : '?';
+    const trackableUrl = `${linkUrl}${separator}ref_asesor=${currentAdvisorId}&asesor=${encodeURIComponent(currentAdvisorName)}&origen=Cotizador_Propuesta`;
+    
+    navigator.clipboard.writeText(trackableUrl);
+    alert(`¡Link Trazable Copiado!\n\nRecurso: ${linkTitle}\nEnlace: ${trackableUrl}\n\nCuando el cliente abra y complete este formulario, se inyectará en el CRM asignado automáticamente a: ${currentAdvisorName}.`);
   };
 
   const loadLeads = async () => {
@@ -367,8 +474,15 @@ function Dashboard() {
             </p>
           </div>
           
-          {/* Header Utilities (Search & Bell) */}
-          <div style={{ display: 'flex', gap: '1rem', position: 'relative' }}>
+          {/* Header Utilities (Search, Inject & Bell) */}
+          <div style={{ display: 'flex', gap: '1rem', position: 'relative', alignItems: 'center' }}>
+            <button 
+              onClick={openInjectModal} 
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '8px', padding: '0.6rem 1.2rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem' }}
+            >
+              <UserPlus size={18} /> + Inyectar Lead
+            </button>
+
             <div style={{ position: 'relative' }}>
               <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
               <input type="text" placeholder="Buscar cliente..." style={{ paddingLeft: '2.5rem', width: '250px' }} />
@@ -662,14 +776,14 @@ function Dashboard() {
         </div>
       )}
 
-      {/* Modal Biblioteca con Links (Drive) */}
+      {/* Modal Biblioteca con Links (Drive & Cotizador) */}
       {showLibraryModal && (
         <div className="modal-overlay" onClick={() => setShowLibraryModal(false)}>
-          <div className="modal-content animate-fade-in" onClick={e => e.stopPropagation()}>
+          <div className="modal-content animate-fade-in" style={{ maxWidth: '600px' }} onClick={e => e.stopPropagation()}>
             <button className="modal-close" onClick={() => setShowLibraryModal(false)}><X size={24} /></button>
             <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><BookOpen size={24} color="var(--accent-color)"/> Biblioteca Comercial</h2>
             
-            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>Accede a documentos, videos y guías (Enlaces externos a Drive).</p>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>Accede a documentos, cotizadores y guías. Genera tu enlace trazable para inyectar prospectos automáticamente a tu nombre.</p>
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
               {libraryLinks.map(link => (
@@ -680,7 +794,18 @@ function Dashboard() {
                     </div>
                     <div>
                       <h4 style={{ margin: '0 0 0.25rem 0' }}>{link.title}</h4>
-                      <a href={link.url} target="_blank" rel="noreferrer" style={{ fontSize: '0.875rem', color: 'var(--accent-color)' }}>Abrir enlace</a>
+                      <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                        <a href={link.url} target="_blank" rel="noreferrer" style={{ fontSize: '0.875rem', color: 'var(--accent-color)' }}>Abrir enlace</a>
+                        {link.url && link.url !== '#' && (
+                          <button 
+                            onClick={() => copyTrackableLink(link.url, link.title)}
+                            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(59, 130, 246, 0.15)', border: '1px solid rgba(59, 130, 246, 0.3)', color: '#93c5fd', borderRadius: '4px', padding: '0.2rem 0.5rem', fontSize: '0.75rem', cursor: 'pointer' }}
+                            title="Copiar enlace con trazabilidad de tu usuario comercial"
+                          >
+                            <Share2 size={12} /> Copiar Link Trazable
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   {userRole === 'admin' && (
@@ -697,6 +822,146 @@ function Dashboard() {
                 + Añadir Nuevo Enlace (Drive / Video)
               </button>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal Inyección Manual de Lead */}
+      {showInjectModal && (
+        <div className="modal-overlay" onClick={() => setShowInjectModal(false)}>
+          <div className="modal-content animate-fade-in" style={{ maxWidth: '550px' }} onClick={e => e.stopPropagation()}>
+            <button className="modal-close" onClick={() => setShowInjectModal(false)}><X size={24} /></button>
+            <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <UserPlus size={24} color="var(--accent-color)"/> Inyectar Cliente / Lead Directo
+            </h2>
+            <form onSubmit={handleInjectLead} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Nombre Completo *</label>
+                <input 
+                  type="text" 
+                  required 
+                  placeholder="ej. Juan Pérez" 
+                  value={injectFormData.nombre_completo} 
+                  onChange={e => setInjectFormData({...injectFormData, nombre_completo: e.target.value})} 
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'var(--bg-primary)', color: '#fff' }} 
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Teléfono / WhatsApp *</label>
+                  <input 
+                    type="text" 
+                    required 
+                    placeholder="ej. +573100000000" 
+                    value={injectFormData.telefono_whatsapp} 
+                    onChange={e => setInjectFormData({...injectFormData, telefono_whatsapp: e.target.value})} 
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'var(--bg-primary)', color: '#fff' }} 
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Correo Electrónico</label>
+                  <input 
+                    type="email" 
+                    placeholder="cliente@empresa.com" 
+                    value={injectFormData.correo_electronico} 
+                    onChange={e => setInjectFormData({...injectFormData, correo_electronico: e.target.value})} 
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'var(--bg-primary)', color: '#fff' }} 
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Empresa</label>
+                  <input 
+                    type="text" 
+                    placeholder="ej. Innovaciones SAS" 
+                    value={injectFormData.empresa} 
+                    onChange={e => setInjectFormData({...injectFormData, empresa: e.target.value})} 
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'var(--bg-primary)', color: '#fff' }} 
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Comercial Asignado</label>
+                  <select 
+                    value={injectFormData.comercial_asignado} 
+                    onChange={e => setInjectFormData({...injectFormData, comercial_asignado: e.target.value})}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'var(--bg-primary)', color: '#fff' }}
+                  >
+                    <option value="">Seleccionar Comercial...</option>
+                    {asesores.map(asesor => (
+                      <option key={asesor.id_usuario} value={asesor.id_usuario}>
+                        {asesor.nombre} {asesor.id_usuario === session?.user?.id ? '(Tú)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Origen</label>
+                  <select 
+                    value={injectFormData.origen_captura} 
+                    onChange={e => setInjectFormData({...injectFormData, origen_captura: e.target.value})}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'var(--bg-primary)', color: '#fff' }}
+                  >
+                    <option value="Contacto_Directo">Contacto Directo</option>
+                    <option value="Cotizador_Propuesta">Cotizador / Propuesta</option>
+                    <option value="Web_Urgente">Web Urgente</option>
+                    <option value="Web_Curioso">Web Curioso</option>
+                    <option value="Bot_WhatsApp">Bot WhatsApp</option>
+                    <option value="Sheet_Warm">Sheet Warm</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Temperatura</label>
+                  <select 
+                    value={injectFormData.temperatura_tier} 
+                    onChange={e => setInjectFormData({...injectFormData, temperatura_tier: e.target.value})}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'var(--bg-primary)', color: '#fff' }}
+                  >
+                    <option value="HOT">🔴 HOT</option>
+                    <option value="WARM">🟡 WARM</option>
+                    <option value="COLD">🔵 COLD</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Estado Comercial</label>
+                  <select 
+                    value={injectFormData.estado_comercial} 
+                    onChange={e => setInjectFormData({...injectFormData, estado_comercial: e.target.value})}
+                    style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'var(--bg-primary)', color: '#fff' }}
+                  >
+                    <option value="Nuevo">Nuevo</option>
+                    <option value="Contactado">Contactado</option>
+                    <option value="Reunión_Agendada">Reunión Agendada</option>
+                    <option value="Propuesta_Enviada">Propuesta Enviada</option>
+                    <option value="Cerrado_Ganado">Cerrado Ganado</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>Detalle de la Propuesta / Dolor</label>
+                <textarea 
+                  rows={3} 
+                  placeholder="Detalles sobre el contacto externo, propuesta enviada o servicios cotizados..." 
+                  value={injectFormData.dolor_identificado} 
+                  onChange={e => setInjectFormData({...injectFormData, dolor_identificado: e.target.value})} 
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '6px', border: '1px solid var(--glass-border)', background: 'var(--bg-primary)', color: '#fff', fontFamily: 'inherit' }} 
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={injecting}
+                style={{ padding: '0.85rem', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '6px', marginTop: '0.5rem', fontWeight: 'bold', fontSize: '1rem', cursor: 'pointer' }}
+              >
+                {injecting ? 'Guardando cliente...' : '🚀 Inyectar Cliente en CRM'}
+              </button>
+            </form>
           </div>
         </div>
       )}
