@@ -7,7 +7,7 @@ import { es } from 'date-fns/locale';
 
 const TEMPLATES = [
   { id: 1, name: 'Primer Contacto (Frío)', subject: 'Mejora la gestión en tu empresa', body: 'Hola {nombre},\n\nHe notado que en {empresa} podrían beneficiarse de una solución para: {dolor}.\n\nMe gustaría mostrarte cómo Levanna puede ayudar. ¿Tienes 10 minutos el martes?\n\nSaludos,' },
-  { id: 2, name: 'Seguimiento Reunión', subject: 'Resumen de nuestra charla - Levanna', body: 'Hola {nombre},\n\nGracias por tu tiempo. Te comparto la información sobre cómo abordaremos el tema de {dolor}.\n\nQuedo atento a tus comentarios.' },
+  { id: 2, name: 'Envío de Propuesta y Cotización', subject: 'Propuesta Comercial y Cotización - Levanna', body: 'Hola {nombre},\n\nGracias por tu tiempo. Te comparto nuestra propuesta comercial y cotizador interactivo para abordar {dolor}:\n\n{link_cotizador}\n\nQuedo atento a tus comentarios para cualquier inquietud.' },
 ];
 
 function Login() {
@@ -364,22 +364,53 @@ function Dashboard() {
     loadTimeline(lead.id_lead);
   };
 
+  const handleSendProposal = async (lead: any) => {
+    if (!lead || !session) return;
+    const currentAdvisorId = session.user.id;
+    const currentAdvisorName = userAlias || 'Asesor';
+    const cotizadorUrl = `https://levanna-tenant-hub-hub.vercel.app/cotizador_comercial.html?ref_asesor=${currentAdvisorId}&asesor=${encodeURIComponent(currentAdvisorName)}&origen=Cotizador_Propuesta`;
+
+    const message = `Hola ${lead.nombre_completo}, te comparto nuestra propuesta comercial y cotizador interactivo para que puedas revisar los detalles y solicitar el contrato directamente:\n\n${cotizadorUrl}\n\nQuedo a tu disposición ante cualquier duda.`;
+    
+    window.open(`https://wa.me/${lead.telefono_whatsapp?.replace(/\+/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
+
+    await supabase.from('historial_interacciones').insert([{
+      id_lead: lead.id_lead,
+      id_usuario: session.user.id,
+      tipo_accion: 'Envío de Cotización',
+      nota: `Se compartió el enlace trazable del cotizador comercial por WhatsApp.`
+    }]);
+
+    if (lead.estado_comercial !== 'Propuesta_Enviada') {
+      await supabase.from('leads_master').update({ estado_comercial: 'Propuesta_Enviada' }).eq('id_lead', lead.id_lead);
+      setSelectedLead({ ...lead, estado_comercial: 'Propuesta_Enviada' });
+      setLeads(leads.map(l => l.id_lead === lead.id_lead ? { ...l, estado_comercial: 'Propuesta_Enviada' } : l));
+    }
+
+    loadTimeline(lead.id_lead);
+  };
+
   const copyTemplate = async (template: any) => {
-    if (!selectedLead) return;
+    if (!selectedLead || !session) return;
+    const currentAdvisorId = session.user.id;
+    const currentAdvisorName = userAlias || 'Asesor';
+    const cotizadorUrl = `https://levanna-tenant-hub-hub.vercel.app/cotizador_comercial.html?ref_asesor=${currentAdvisorId}&asesor=${encodeURIComponent(currentAdvisorName)}&origen=Cotizador_Propuesta`;
+
     const body = template.body
       .replace('{nombre}', selectedLead.nombre_completo)
       .replace('{empresa}', selectedLead.empresa || 'tu empresa')
-      .replace('{dolor}', selectedLead.dolor_identificado || 'tus procesos');
+      .replace('{dolor}', selectedLead.dolor_identificado || 'tus procesos')
+      .replace('{link_cotizador}', cotizadorUrl);
     
     navigator.clipboard.writeText(`Asunto: ${template.subject}\n\n${body}`);
     setShowTemplatesModal(false);
-    alert('¡Plantilla copiada al portapapeles!');
+    alert('¡Plantilla copiada al portapapeles con tu link trazable!');
 
     await supabase.from('historial_interacciones').insert([{
       id_lead: selectedLead.id_lead,
       id_usuario: session.user.id,
-      tipo_accion: 'Email n8n',
-      nota: `Se copió la plantilla: ${template.name}`
+      tipo_accion: 'Envío de Cotización',
+      nota: `Se copió la plantilla "${template.name}" con enlace trazable de cotización.`
     }]);
     loadTimeline(selectedLead.id_lead);
   };
@@ -666,12 +697,15 @@ function Dashboard() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
-                    <button onClick={() => handleWhatsApp(selectedLead)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: '#25D366', color: '#fff', border: 'none' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '2rem' }}>
+                    <button onClick={() => handleWhatsApp(selectedLead)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: '#25D366', color: '#fff', border: 'none', padding: '0.75rem', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
                       <MessageCircle size={18} /> Chat WhatsApp
                     </button>
-                    <button onClick={() => setShowTemplatesModal(true)} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'var(--accent-color)', color: '#fff', border: 'none' }}>
-                      <Mail size={18} /> Plantillas de Correo
+                    <button onClick={() => handleSendProposal(selectedLead)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'var(--accent-color)', color: '#fff', border: 'none', padding: '0.75rem', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
+                      <Share2 size={18} /> Enviar Cotización
+                    </button>
+                    <button onClick={() => setShowTemplatesModal(true)} style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', padding: '0.6rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
+                      <Mail size={16} /> Plantillas de Correo (con Link Trazable)
                     </button>
                   </div>
 
