@@ -364,13 +364,29 @@ function Dashboard() {
     loadTimeline(lead.id_lead);
   };
 
+  const openCotizadorHub = (lead: any) => {
+    if (!lead || !session) return;
+    const currentAdvisorId = session.user.id;
+    const currentAdvisorName = userAlias || 'Asesor';
+    const empresaCliente = lead.empresa || lead.nombre_completo;
+    const cotizacionCode = `LEV-2026-${empresaCliente.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().substring(0, 8)}`;
+    
+    const hubUrl = `https://levanna-tenant-hub-hub.vercel.app/cotizador_comercial.html?cliente=${encodeURIComponent(empresaCliente)}&contacto=${encodeURIComponent(lead.nombre_completo)}&email=${encodeURIComponent(lead.correo_electronico || '')}&telefono=${encodeURIComponent(lead.telefono_whatsapp || '')}&cotizacion=${cotizacionCode}&ref_asesor=${currentAdvisorId}&asesor=${encodeURIComponent(currentAdvisorName)}&lead_id=${lead.id_lead}`;
+    
+    window.open(hubUrl, '_blank');
+  };
+
   const handleSendProposal = async (lead: any) => {
     if (!lead || !session) return;
     const currentAdvisorId = session.user.id;
     const currentAdvisorName = userAlias || 'Asesor';
-    const cotizadorUrl = `https://levanna-tenant-hub-hub.vercel.app/cotizador_comercial.html?ref_asesor=${currentAdvisorId}&asesor=${encodeURIComponent(currentAdvisorName)}&origen=Cotizador_Propuesta`;
+    const empresaCliente = lead.empresa || lead.nombre_completo;
+    const cotizacionCode = `LEV-2026-${empresaCliente.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().substring(0, 8)}`;
 
-    const message = `Hola ${lead.nombre_completo}, te comparto nuestra propuesta comercial y cotizador interactivo para que puedas revisar los detalles y solicitar el contrato directamente:\n\n${cotizadorUrl}\n\nQuedo a tu disposición ante cualquier duda.`;
+    // Enlace DIRECTO PÚBLICO para el cliente (cotizacion.html) con sus datos prediligenciados
+    const publicClientUrl = `https://levanna-tenant-hub-hub.vercel.app/cotizacion.html?cliente=${encodeURIComponent(empresaCliente)}&contacto=${encodeURIComponent(lead.nombre_completo)}&email=${encodeURIComponent(lead.correo_electronico || '')}&telefono=${encodeURIComponent(lead.telefono_whatsapp || '')}&cotizacion=${cotizacionCode}&ref_asesor=${currentAdvisorId}&asesor=${encodeURIComponent(currentAdvisorName)}&lead_id=${lead.id_lead}`;
+
+    const message = `Hola ${lead.nombre_completo}, te comparto nuestra propuesta comercial y cotización interactiva para que puedas revisar los detalles de ${empresaCliente}:\n\n${publicClientUrl}\n\nQuedo a tu disposición ante cualquier duda o ajuste.`;
     
     window.open(`https://wa.me/${lead.telefono_whatsapp?.replace(/\+/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
 
@@ -378,7 +394,7 @@ function Dashboard() {
       id_lead: lead.id_lead,
       id_usuario: session.user.id,
       tipo_accion: 'Envío de Cotización',
-      nota: `Se compartió el enlace trazable del cotizador comercial por WhatsApp.`
+      nota: `Se compartió la propuesta comercial directa al cliente por WhatsApp.`
     }]);
 
     if (lead.estado_comercial !== 'Propuesta_Enviada') {
@@ -394,23 +410,26 @@ function Dashboard() {
     if (!selectedLead || !session) return;
     const currentAdvisorId = session.user.id;
     const currentAdvisorName = userAlias || 'Asesor';
-    const cotizadorUrl = `https://levanna-tenant-hub-hub.vercel.app/cotizador_comercial.html?ref_asesor=${currentAdvisorId}&asesor=${encodeURIComponent(currentAdvisorName)}&origen=Cotizador_Propuesta`;
+    const empresaCliente = selectedLead.empresa || selectedLead.nombre_completo;
+    const cotizacionCode = `LEV-2026-${empresaCliente.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().substring(0, 8)}`;
+    
+    const publicClientUrl = `https://levanna-tenant-hub-hub.vercel.app/cotizacion.html?cliente=${encodeURIComponent(empresaCliente)}&contacto=${encodeURIComponent(selectedLead.nombre_completo)}&email=${encodeURIComponent(selectedLead.correo_electronico || '')}&telefono=${encodeURIComponent(selectedLead.telefono_whatsapp || '')}&cotizacion=${cotizacionCode}&ref_asesor=${currentAdvisorId}&asesor=${encodeURIComponent(currentAdvisorName)}&lead_id=${selectedLead.id_lead}`;
 
     const body = template.body
       .replace('{nombre}', selectedLead.nombre_completo)
       .replace('{empresa}', selectedLead.empresa || 'tu empresa')
       .replace('{dolor}', selectedLead.dolor_identificado || 'tus procesos')
-      .replace('{link_cotizador}', cotizadorUrl);
+      .replace('{link_cotizador}', publicClientUrl);
     
     navigator.clipboard.writeText(`Asunto: ${template.subject}\n\n${body}`);
     setShowTemplatesModal(false);
-    alert('¡Plantilla copiada al portapapeles con tu link trazable!');
+    alert('¡Plantilla copiada al portapapeles con el link prediligenciado del cliente!');
 
     await supabase.from('historial_interacciones').insert([{
       id_lead: selectedLead.id_lead,
       id_usuario: session.user.id,
       tipo_accion: 'Envío de Cotización',
-      nota: `Se copió la plantilla "${template.name}" con enlace trazable de cotización.`
+      nota: `Se copió la plantilla "${template.name}" con enlace directo de cotización prediligenciada.`
     }]);
     loadTimeline(selectedLead.id_lead);
   };
@@ -702,10 +721,13 @@ function Dashboard() {
                       <MessageCircle size={18} /> Chat WhatsApp
                     </button>
                     <button onClick={() => handleSendProposal(selectedLead)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'var(--accent-color)', color: '#fff', border: 'none', padding: '0.75rem', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
-                      <Share2 size={18} /> Enviar Cotización
+                      <Share2 size={18} /> Enviar Cotización Directa
+                    </button>
+                    <button onClick={() => openCotizadorHub(selectedLead)} style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#93c5fd', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '0.65rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem' }}>
+                      <Settings size={16} /> ⚙️ Personalizar en Cotizador Hub (Asesor)
                     </button>
                     <button onClick={() => setShowTemplatesModal(true)} style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', padding: '0.6rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
-                      <Mail size={16} /> Plantillas de Correo (con Link Trazable)
+                      <Mail size={16} /> Plantillas de Correo
                     </button>
                   </div>
 
