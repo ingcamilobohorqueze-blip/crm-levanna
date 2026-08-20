@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
-import { Bell, Search, MessageCircle, Mail, LayoutDashboard, Users, Settings, LogOut, Briefcase, Plus, X, BarChart3, Copy, BookOpen, Edit2, Link, UserPlus, Share2, ChevronDown } from 'lucide-react';
+import { Bell, Search, MessageCircle, Mail, LayoutDashboard, Users, Settings, LogOut, Briefcase, Plus, X, BarChart3, Copy, BookOpen, Edit2, Link, UserPlus, Share2, ChevronDown, Filter } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -122,6 +122,11 @@ function Dashboard() {
     { value: 'Cerrado_Ganado', label: '🟢 Cerrado (Ganado)', color: '#4ade80', bg: 'rgba(34, 197, 94, 0.25)', border: 'rgba(34, 197, 94, 0.5)' },
     { value: 'Cerrado_Perdido', label: '⚪ Cerrado (Perdido)', color: '#94a3b8', bg: 'rgba(148, 163, 184, 0.2)', border: 'rgba(148, 163, 184, 0.4)' },
   ];
+
+  // Estados de Filtro para Directorio de Clientes
+  const [filterAsesor, setFilterAsesor] = useState<string>('all');
+  const [filterTier, setFilterTier] = useState<string>('all');
+  const [filterEstado, setFilterEstado] = useState<string>('all');
 
   // Modals & Menu State
   const [showStatusMenu, setShowStatusMenu] = useState(false);
@@ -523,6 +528,17 @@ function Dashboard() {
     }
   };
 
+  // Filtro dinámico para el Directorio de Clientes
+  const filteredDirectoryLeads = leads.filter(l => {
+    if (filterAsesor !== 'all') {
+      if (filterAsesor === 'unassigned' && l.comercial_asignado) return false;
+      if (filterAsesor !== 'unassigned' && l.comercial_asignado !== filterAsesor) return false;
+    }
+    if (filterTier !== 'all' && l.temperatura_tier !== filterTier) return false;
+    if (filterEstado !== 'all' && l.estado_comercial !== filterEstado) return false;
+    return true;
+  });
+
   // Filtramos leads según la pestaña activa
   const leadsToShow = activeTab === 'admin' || activeTab === 'todos' 
     ? leads 
@@ -557,12 +573,6 @@ function Dashboard() {
           <a href="#" onClick={(e) => { e.preventDefault(); setShowLibraryModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', color: 'var(--text-secondary)' }}>
             <BookOpen size={20} /> Biblioteca de Recursos
           </a>
-          
-          {userRole === 'admin' && (
-            <a href="#" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', color: 'var(--text-secondary)' }}>
-              <Settings size={20} /> Configuración
-            </a>
-          )}
         </nav>
 
         <div style={{ padding: '1.5rem 1rem', borderTop: '1px solid var(--glass-border)' }}>
@@ -628,10 +638,83 @@ function Dashboard() {
 
         {activeTab === 'todos' ? (
           // Vista Todos Los Clientes (Tabla)
-          <section className="glass-panel" style={{ flex: 1, overflow: 'auto', padding: 0 }}>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', whiteSpace: 'nowrap' }}>
-                <thead>
+          // Vista Todos Los Clientes (Tabla con Filtros y Scroll Horizontal Suave)
+          <section className="glass-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
+            {/* Barra de Filtros Interactivos */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', padding: '1rem 1.5rem', background: 'rgba(15, 23, 42, 0.6)', borderBottom: '1px solid var(--glass-border)', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Filter size={16} /> Filtrar por:
+              </span>
+
+              {/* Filtro Comercial */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Comercial:</span>
+                <select
+                  value={filterAsesor}
+                  onChange={(e) => setFilterAsesor(e.target.value)}
+                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', background: '#0f172a', color: '#f8fafc', border: '1px solid rgba(255, 255, 255, 0.15)', borderRadius: '6px', cursor: 'pointer' }}
+                >
+                  <option value="all" style={{ background: '#0f172a', color: '#f8fafc' }}>Todos los Asesores</option>
+                  {asesores.map(a => (
+                    <option key={a.id_usuario} value={a.id_usuario} style={{ background: '#0f172a', color: '#f8fafc' }}>{a.nombre}</option>
+                  ))}
+                  <option value="unassigned" style={{ background: '#0f172a', color: '#f8fafc' }}>Sin asignar</option>
+                </select>
+              </div>
+
+              {/* Filtro Tier */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Tier:</span>
+                <select
+                  value={filterTier}
+                  onChange={(e) => setFilterTier(e.target.value)}
+                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', background: '#0f172a', color: '#f8fafc', border: '1px solid rgba(255, 255, 255, 0.15)', borderRadius: '6px', cursor: 'pointer' }}
+                >
+                  <option value="all" style={{ background: '#0f172a', color: '#f8fafc' }}>Todos los Tiers</option>
+                  <option value="HOT" style={{ background: '#0f172a', color: '#fca5a5' }}>🔥 HOT</option>
+                  <option value="WARM" style={{ background: '#0f172a', color: '#fcd34d' }}>⚡ WARM</option>
+                  <option value="COLD" style={{ background: '#0f172a', color: '#93c5fd' }}>❄️ COLD</option>
+                  <option value="LAG" style={{ background: '#0f172a', color: '#cbd5e1' }}>⏳ LAG</option>
+                </select>
+              </div>
+
+              {/* Filtro Estado Comercial */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Estado:</span>
+                <select
+                  value={filterEstado}
+                  onChange={(e) => setFilterEstado(e.target.value)}
+                  style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', background: '#0f172a', color: '#f8fafc', border: '1px solid rgba(255, 255, 255, 0.15)', borderRadius: '6px', cursor: 'pointer' }}
+                >
+                  <option value="all" style={{ background: '#0f172a', color: '#f8fafc' }}>Todos los Estados</option>
+                  <option value="Nuevo" style={{ background: '#0f172a', color: '#f8fafc' }}>Nuevo</option>
+                  <option value="Contactado" style={{ background: '#0f172a', color: '#fde047' }}>💬 Contactado</option>
+                  <option value="Reunión_Agendada" style={{ background: '#0f172a', color: '#c084fc' }}>📅 Reunión Agendada</option>
+                  <option value="Propuesta_Enviada" style={{ background: '#0f172a', color: '#93c5fd' }}>📄 Propuesta Enviada</option>
+                  <option value="Cerrado_Ganado" style={{ background: '#0f172a', color: '#4ade80' }}>🟢 Cerrado Ganado</option>
+                  <option value="Cerrado_Perdido" style={{ background: '#0f172a', color: '#94a3b8' }}>⚪ Cerrado Perdido</option>
+                </select>
+              </div>
+
+              {/* Botón para Limpiar Filtros */}
+              {(filterAsesor !== 'all' || filterTier !== 'all' || filterEstado !== 'all') && (
+                <button
+                  onClick={() => { setFilterAsesor('all'); setFilterTier('all'); setFilterEstado('all'); }}
+                  style={{ padding: '0.35rem 0.75rem', fontSize: '0.75rem', background: 'rgba(239, 68, 68, 0.2)', color: '#fca5a5', border: '1px solid rgba(239, 68, 68, 0.4)', borderRadius: '6px', cursor: 'pointer' }}
+                >
+                  Limpiar Filtros
+                </button>
+              )}
+
+              <span style={{ marginLeft: 'auto', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                Mostrando {filteredDirectoryLeads.length} de {leads.length} clientes
+              </span>
+            </div>
+
+            {/* Scroll Container Horizontal y Vertical */}
+            <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto', width: '100%' }}>
+              <table style={{ width: '100%', minWidth: '1100px', textAlign: 'left', borderCollapse: 'collapse', whiteSpace: 'nowrap' }}>
+                <thead style={{ position: 'sticky', top: 0, background: '#0f172a', zIndex: 10 }}>
                   <tr style={{ borderBottom: '1px solid var(--glass-border)', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
                     <th style={{ padding: '1rem' }}>ID Lead</th>
                     <th style={{ padding: '1rem' }}>Nombre Completo</th>
@@ -647,7 +730,7 @@ function Dashboard() {
                   </tr>
                 </thead>
                 <tbody style={{ fontSize: '0.875rem' }}>
-                  {leads.map(lead => (
+                  {filteredDirectoryLeads.map(lead => (
                     <tr key={lead.id_lead} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
                       <td style={{ padding: '1rem', color: 'var(--text-secondary)' }} title={lead.id_lead}>{lead.id_lead.substring(0, 8)}...</td>
                       <td style={{ padding: '1rem' }}><strong>{lead.nombre_completo}</strong></td>
@@ -656,7 +739,15 @@ function Dashboard() {
                       <td style={{ padding: '1rem' }}>{lead.empresa || '-'}</td>
                       <td style={{ padding: '1rem' }}>{lead.origen_captura?.replace('_', ' ')}</td>
                       <td style={{ padding: '1rem' }}><span className={`badge ${getTierColor(lead.temperatura_tier)}`}>{lead.temperatura_tier}</span></td>
-                      <td style={{ padding: '1rem' }}>{lead.estado_comercial?.replace('_', ' ')}</td>
+                      <td style={{ padding: '1rem' }}>
+                        {lead.estado_comercial === 'Cerrado_Ganado' ? (
+                          <span className="badge" style={{ background: 'rgba(34, 197, 94, 0.25)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.4)', fontWeight: 700 }}>🟢 Cerrado Ganado</span>
+                        ) : lead.estado_comercial === 'Cerrado_Perdido' ? (
+                          <span className="badge" style={{ background: 'rgba(148, 163, 184, 0.2)', color: '#94a3b8', border: '1px solid rgba(148, 163, 184, 0.3)' }}>⚪ Cerrado Perdido</span>
+                        ) : (
+                          lead.estado_comercial?.replace('_', ' ')
+                        )}
+                      </td>
                       <td style={{ padding: '1rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={lead.dolor_identificado}>{lead.dolor_identificado || '-'}</td>
                       <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>
                         {lead.ultimo_contacto ? formatDistanceToNow(new Date(lead.ultimo_contacto), { addSuffix: true, locale: es }) : '-'}
@@ -666,11 +757,11 @@ function Dashboard() {
                           <select 
                             value={lead.comercial_asignado || 'null'}
                             onChange={(e) => handleAssignLead(lead.id_lead, e.target.value)}
-                            style={{ padding: '0.2rem 0.5rem', fontSize: '0.875rem', maxWidth: '140px', background: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)' }}
+                            style={{ padding: '0.3rem 0.6rem', fontSize: '0.85rem', maxWidth: '160px', background: '#0f172a', color: '#f8fafc', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '6px', cursor: 'pointer' }}
                           >
-                            <option value="null">Sin asignar</option>
+                            <option value="null" style={{ background: '#0f172a', color: '#f8fafc' }}>Sin asignar</option>
                             {asesores.map(asesor => (
-                              <option key={asesor.id_usuario} value={asesor.id_usuario}>{asesor.nombre}</option>
+                              <option key={asesor.id_usuario} value={asesor.id_usuario} style={{ background: '#0f172a', color: '#f8fafc' }}>{asesor.nombre}</option>
                             ))}
                           </select>
                         ) : (

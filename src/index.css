@@ -34,6 +34,24 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Custom Scrollbars para tablas y paneles */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.8);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(59, 130, 246, 0.4);
+  border-radius: 6px;
+  border: 2px solid rgba(15, 23, 42, 0.8);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(59, 130, 246, 0.7);
+}
+
 a {
   font-weight: 500;
   color: var(--accent-color);
