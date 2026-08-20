@@ -123,7 +123,8 @@ function Dashboard() {
     { value: 'Cerrado_Perdido', label: '⚪ Cerrado (Perdido)', color: '#94a3b8', bg: 'rgba(148, 163, 184, 0.2)', border: 'rgba(148, 163, 184, 0.4)' },
   ];
 
-  // Estados de Filtro para Directorio de Clientes
+  // Estados de Búsqueda y Filtro para Directorio de Clientes
+  const [searchQuery, setSearchQuery] = useState('');
   const [filterAsesor, setFilterAsesor] = useState<string>('all');
   const [filterTier, setFilterTier] = useState<string>('all');
   const [filterEstado, setFilterEstado] = useState<string>('all');
@@ -528,8 +529,25 @@ function Dashboard() {
     }
   };
 
+  // Función de coincidencia de búsqueda global por texto
+  const matchesSearch = (lead: any, query: string) => {
+    if (!query || query.trim() === '') return true;
+    const q = query.toLowerCase().trim();
+    return (
+      lead.nombre_completo?.toLowerCase().includes(q) ||
+      lead.empresa?.toLowerCase().includes(q) ||
+      lead.correo_electronico?.toLowerCase().includes(q) ||
+      lead.telefono_whatsapp?.toLowerCase().includes(q) ||
+      lead.dolor_identificado?.toLowerCase().includes(q) ||
+      lead.id_lead?.toLowerCase().includes(q) ||
+      lead.estado_comercial?.toLowerCase().includes(q) ||
+      lead.temperatura_tier?.toLowerCase().includes(q)
+    );
+  };
+
   // Filtro dinámico para el Directorio de Clientes
   const filteredDirectoryLeads = leads.filter(l => {
+    if (!matchesSearch(l, searchQuery)) return false;
     if (filterAsesor !== 'all') {
       if (filterAsesor === 'unassigned' && l.comercial_asignado) return false;
       if (filterAsesor !== 'unassigned' && l.comercial_asignado !== filterAsesor) return false;
@@ -539,10 +557,22 @@ function Dashboard() {
     return true;
   });
 
-  // Filtramos leads según la pestaña activa
-  const leadsToShow = activeTab === 'admin' || activeTab === 'todos' 
+  // Filtramos leads según la pestaña activa y la búsqueda
+  const baseLeadsToShow = activeTab === 'admin' || activeTab === 'todos' 
     ? leads 
     : leads.filter(l => l.comercial_asignado === session?.user?.id);
+
+  const leadsToShow = baseLeadsToShow.filter(l => matchesSearch(l, searchQuery));
+
+  // Notificaciones dinámicas calculadas sobre la base de datos de leads
+  const dynamicNotifications = leads.filter(lead => {
+    if (userRole !== 'admin' && lead.comercial_asignado !== session?.user?.id) return false;
+    return (
+      lead.estado_comercial === 'Cerrado_Ganado' ||
+      (lead.temperatura_tier === 'HOT' && lead.estado_comercial === 'Nuevo') ||
+      lead.estado_comercial === 'Propuesta_Enviada'
+    );
+  }).slice(0, 8);
 
   if (!session) return null;
 
@@ -613,24 +643,97 @@ function Dashboard() {
 
             <div style={{ position: 'relative' }}>
               <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }} />
-              <input type="text" placeholder="Buscar cliente..." style={{ paddingLeft: '2.5rem', width: '250px' }} />
+              <input 
+                type="text" 
+                placeholder="Buscar por nombre, empresa, correo, whatsapp..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{ paddingLeft: '2.5rem', paddingRight: searchQuery ? '2rem' : '1rem', width: '280px', background: '#0f172a', color: '#f8fafc', border: '1px solid rgba(255, 255, 255, 0.15)', borderRadius: '8px' }} 
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-secondary)', padding: '2px', cursor: 'pointer' }}
+                  title="Limpiar búsqueda"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
-            <button onClick={() => setShowNotifications(!showNotifications)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative', background: 'transparent', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '0.5rem' }}>
+            
+            <button onClick={(e) => { e.stopPropagation(); setShowNotifications(!showNotifications); }} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', position: 'relative', background: 'transparent', border: '1px solid var(--glass-border)', borderRadius: '8px', padding: '0.5rem', cursor: 'pointer' }}>
               <Bell size={18} color="var(--text-secondary)" />
-              <span style={{ position: 'absolute', top: '-2px', right: '-2px', background: 'var(--tier-hot)', width: '10px', height: '10px', borderRadius: '50%' }}></span>
+              {dynamicNotifications.length > 0 && (
+                <span style={{ position: 'absolute', top: '-2px', right: '-2px', background: 'var(--tier-hot)', color: '#fff', fontSize: '0.65rem', fontWeight: 'bold', width: '16px', height: '16px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {dynamicNotifications.length}
+                </span>
+              )}
             </button>
             
             {showNotifications && (
-              <div className="glass-panel animate-fade-in" style={{ position: 'absolute', top: '100%', right: 0, marginTop: '0.5rem', width: '300px', zIndex: 50, padding: '1rem' }}>
-                <h4 style={{ margin: '0 0 1rem 0' }}>Notificaciones</h4>
-                <div style={{ fontSize: '0.875rem', marginBottom: '0.75rem', paddingBottom: '0.75rem', borderBottom: '1px solid var(--glass-border)' }}>
-                  <strong style={{ color: 'var(--tier-hot)' }}>🔴 SLA Vencido</strong>
-                  <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-secondary)' }}>El lead Carlos Mendoza lleva 30 mins sin contacto.</p>
+              <div 
+                onClick={(e) => e.stopPropagation()}
+                style={{ 
+                  position: 'absolute', 
+                  top: '115%', 
+                  right: 0, 
+                  width: '330px', 
+                  backgroundColor: '#0f172a', 
+                  border: '1px solid rgba(255, 255, 255, 0.15)', 
+                  borderRadius: '12px', 
+                  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.85)', 
+                  zIndex: 200, 
+                  padding: '1.25rem',
+                  backdropFilter: 'blur(16px)' 
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h4 style={{ margin: 0, fontSize: '1rem', color: '#f8fafc' }}>Notificaciones Activas</h4>
+                  <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.2)', color: '#93c5fd' }}>
+                    {dynamicNotifications.length}
+                  </span>
                 </div>
-                <div style={{ fontSize: '0.875rem' }}>
-                  <strong style={{ color: 'var(--tier-cold)' }}>🔵 Nueva asignación</strong>
-                  <p style={{ margin: '0.25rem 0 0 0', color: 'var(--text-secondary)' }}>Se te asignó 1 lead COLD por Round-Robin.</p>
-                </div>
+
+                {dynamicNotifications.length === 0 ? (
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>No tienes notificaciones pendientes.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '300px', overflowY: 'auto' }}>
+                    {dynamicNotifications.map(n => (
+                      <div
+                        key={n.id_lead}
+                        onClick={() => {
+                          setSelectedLead(n);
+                          setActiveTab('bandeja');
+                          setShowNotifications(false);
+                        }}
+                        style={{
+                          padding: '0.75rem',
+                          borderRadius: '8px',
+                          background: 'rgba(30, 41, 59, 0.6)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          cursor: 'pointer',
+                          transition: 'background 0.2s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(30, 41, 59, 0.6)'}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', alignItems: 'center' }}>
+                          <strong style={{ fontSize: '0.8rem', color: n.estado_comercial === 'Cerrado_Ganado' ? '#4ade80' : n.temperatura_tier === 'HOT' ? '#fca5a5' : '#93c5fd' }}>
+                            {n.estado_comercial === 'Cerrado_Ganado' ? '🎉 Venta Cerrada' : n.temperatura_tier === 'HOT' ? '🔥 Lead Prioritario' : '📄 Propuesta Enviada'}
+                          </strong>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                            {formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: es })}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: '0.85rem', margin: 0, fontWeight: 600, color: '#f8fafc' }}>{n.nombre_completo} {n.empresa ? `(${n.empresa})` : ''}</p>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                          {n.dolor_identificado || 'Sin detalles registrados'}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
