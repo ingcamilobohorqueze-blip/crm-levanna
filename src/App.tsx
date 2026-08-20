@@ -653,8 +653,23 @@ function Dashboard() {
                     }}
                     onClick={() => { setActiveTab('bandeja'); setSelectedLead(lead); }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                      <span className={`badge ${getTierColor(lead.temperatura_tier)}`}>{lead.temperatura_tier}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                        {lead.estado_comercial === 'Cerrado_Ganado' ? (
+                          <span className="badge" style={{ background: 'rgba(34, 197, 94, 0.25)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.4)', fontWeight: 700 }}>
+                            🎉 CERRADO GANADO
+                          </span>
+                        ) : lead.estado_comercial === 'Propuesta_Enviada' ? (
+                          <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.25)', color: '#93c5fd', border: '1px solid rgba(59, 130, 246, 0.4)' }}>
+                            📄 PROPUESTA
+                          </span>
+                        ) : (
+                          <span className={`badge ${getTierColor(lead.temperatura_tier)}`}>{lead.temperatura_tier}</span>
+                        )}
+                        {lead.estado_comercial === 'Cerrado_Ganado' && (
+                          <span className={`badge ${getTierColor(lead.temperatura_tier)}`}>{lead.temperatura_tier}</span>
+                        )}
+                      </div>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                         {formatDistanceToNow(new Date(lead.created_at), { addSuffix: true, locale: es })}
                       </span>
@@ -707,14 +722,23 @@ function Dashboard() {
                     <select 
                       value={selectedLead.estado_comercial} 
                       onChange={(e) => handleStatusChange(e.target.value)}
-                      style={{ padding: '0.5rem 1rem', fontSize: '0.875rem', fontWeight: 600, background: 'rgba(59, 130, 246, 0.2)', color: '#93c5fd', border: '1px solid rgba(59, 130, 246, 0.4)' }}
+                      style={{ 
+                        padding: '0.5rem 1rem', 
+                        fontSize: '0.875rem', 
+                        fontWeight: 700, 
+                        background: selectedLead.estado_comercial === 'Cerrado_Ganado' ? 'rgba(34, 197, 94, 0.25)' : 'rgba(59, 130, 246, 0.2)', 
+                        color: selectedLead.estado_comercial === 'Cerrado_Ganado' ? '#4ade80' : '#93c5fd', 
+                        border: selectedLead.estado_comercial === 'Cerrado_Ganado' ? '1px solid rgba(34, 197, 94, 0.5)' : '1px solid rgba(59, 130, 246, 0.4)',
+                        borderRadius: '6px',
+                        cursor: 'pointer'
+                      }}
                     >
                       <option value="Nuevo">Nuevo</option>
                       <option value="Contactado">Contactado</option>
                       <option value="Reunión_Agendada">Reunión Agendada</option>
                       <option value="Propuesta_Enviada">Propuesta Enviada</option>
-                      <option value="Cerrado_Ganado">Cerrado Ganado</option>
-                      <option value="Cerrado_Perdido">Cerrado Perdido</option>
+                      <option value="Cerrado_Ganado">🎉 Cerrado Ganado</option>
+                      <option value="Cerrado_Perdido">❌ Cerrado Perdido</option>
                     </select>
                   </div>
 
