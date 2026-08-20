@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
-import { Bell, Search, MessageCircle, Mail, LayoutDashboard, Users, Settings, LogOut, Briefcase, Plus, X, BarChart3, Copy, BookOpen, Edit2, Link, UserPlus, Share2 } from 'lucide-react';
+import { Bell, Search, MessageCircle, Mail, LayoutDashboard, Users, Settings, LogOut, Briefcase, Plus, X, BarChart3, Copy, BookOpen, Edit2, Link, UserPlus, Share2, ChevronDown } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
@@ -114,7 +114,17 @@ function Dashboard() {
   const [selectedLead, setSelectedLead] = useState<any | null>(null);
   const [newNote, setNewNote] = useState('');
   
-  // Modals
+  const STATUS_OPTIONS = [
+    { value: 'Nuevo', label: 'Nuevo', color: '#93c5fd', bg: 'rgba(59, 130, 246, 0.2)', border: 'rgba(59, 130, 246, 0.4)' },
+    { value: 'Contactado', label: '💬 Contactado', color: '#fde047', bg: 'rgba(234, 179, 8, 0.2)', border: 'rgba(234, 179, 8, 0.4)' },
+    { value: 'Reunión_Agendada', label: '📅 Reunión Agendada', color: '#c084fc', bg: 'rgba(168, 85, 247, 0.2)', border: 'rgba(168, 85, 247, 0.4)' },
+    { value: 'Propuesta_Enviada', label: '📄 Propuesta Enviada', color: '#93c5fd', bg: 'rgba(59, 130, 246, 0.2)', border: 'rgba(59, 130, 246, 0.4)' },
+    { value: 'Cerrado_Ganado', label: '🟢 Cerrado (Ganado)', color: '#4ade80', bg: 'rgba(34, 197, 94, 0.25)', border: 'rgba(34, 197, 94, 0.5)' },
+    { value: 'Cerrado_Perdido', label: '⚪ Cerrado (Perdido)', color: '#94a3b8', bg: 'rgba(148, 163, 184, 0.2)', border: 'rgba(148, 163, 184, 0.4)' },
+  ];
+
+  // Modals & Menu State
+  const [showStatusMenu, setShowStatusMenu] = useState(false);
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
   const [showLibraryModal, setShowLibraryModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -745,27 +755,82 @@ function Dashboard() {
                       <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', margin: 0 }}>{selectedLead.empresa || 'Individual / Sin empresa'}</p>
                     </div>
                     
-                    <select 
-                      value={selectedLead.estado_comercial} 
-                      onChange={(e) => handleStatusChange(e.target.value)}
-                      style={{ 
-                        padding: '0.5rem 1rem', 
-                        fontSize: '0.875rem', 
-                        fontWeight: 700, 
-                        background: selectedLead.estado_comercial === 'Cerrado_Ganado' ? 'rgba(34, 197, 94, 0.25)' : selectedLead.estado_comercial === 'Cerrado_Perdido' ? 'rgba(148, 163, 184, 0.2)' : 'rgba(59, 130, 246, 0.2)', 
-                        color: selectedLead.estado_comercial === 'Cerrado_Ganado' ? '#4ade80' : selectedLead.estado_comercial === 'Cerrado_Perdido' ? '#94a3b8' : '#93c5fd', 
-                        border: selectedLead.estado_comercial === 'Cerrado_Ganado' ? '1px solid rgba(34, 197, 94, 0.5)' : selectedLead.estado_comercial === 'Cerrado_Perdido' ? '1px solid rgba(148, 163, 184, 0.4)' : '1px solid rgba(59, 130, 246, 0.4)',
-                        borderRadius: '6px',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <option value="Nuevo" style={{ background: '#0f172a', color: '#f8fafc' }}>Nuevo</option>
-                      <option value="Contactado" style={{ background: '#0f172a', color: '#fde047' }}>💬 Contactado</option>
-                      <option value="Reunión_Agendada" style={{ background: '#0f172a', color: '#c084fc' }}>📅 Reunión Agendada</option>
-                      <option value="Propuesta_Enviada" style={{ background: '#0f172a', color: '#93c5fd' }}>📄 Propuesta Enviada</option>
-                      <option value="Cerrado_Ganado" style={{ background: '#0f172a', color: '#4ade80', fontWeight: 'bold' }}>🟢 Cerrado (Ganado)</option>
-                      <option value="Cerrado_Perdido" style={{ background: '#0f172a', color: '#94a3b8' }}>⚪ Cerrado (Perdido)</option>
-                    </select>
+                    {/* Custom Status Dropdown Menu (Evita errores de estilo nativo del navegador) */}
+                    <div style={{ position: 'relative' }}>
+                      {(() => {
+                        const currentOpt = STATUS_OPTIONS.find(o => o.value === selectedLead.estado_comercial) || STATUS_OPTIONS[0];
+                        return (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowStatusMenu(!showStatusMenu);
+                              }}
+                              style={{
+                                padding: '0.5rem 1rem',
+                                fontSize: '0.875rem',
+                                fontWeight: 700,
+                                background: currentOpt.bg,
+                                color: currentOpt.color,
+                                border: `1px solid ${currentOpt.border}`,
+                                borderRadius: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.5rem',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {currentOpt.label} <ChevronDown size={16} />
+                            </button>
+
+                            {showStatusMenu && (
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                style={{
+                                  position: 'absolute',
+                                  top: '115%',
+                                  right: 0,
+                                  width: '220px',
+                                  backgroundColor: '#0f172a',
+                                  border: '1px solid rgba(255, 255, 255, 0.15)',
+                                  borderRadius: '10px',
+                                  boxShadow: '0 20px 40px rgba(0,0,0,0.8)',
+                                  zIndex: 100,
+                                  padding: '0.4rem 0'
+                                }}
+                              >
+                                {STATUS_OPTIONS.map(opt => (
+                                  <div
+                                    key={opt.value}
+                                    onClick={() => {
+                                      handleStatusChange(opt.value);
+                                      setShowStatusMenu(false);
+                                    }}
+                                    style={{
+                                      padding: '0.65rem 1rem',
+                                      fontSize: '0.875rem',
+                                      fontWeight: selectedLead.estado_comercial === opt.value ? 700 : 500,
+                                      color: opt.color,
+                                      backgroundColor: selectedLead.estado_comercial === opt.value ? 'rgba(255, 255, 255, 0.12)' : 'transparent',
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '0.5rem',
+                                      transition: 'background 0.15s ease'
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedLead.estado_comercial === opt.value ? 'rgba(255, 255, 255, 0.12)' : 'transparent'}
+                                  >
+                                    {opt.label}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
