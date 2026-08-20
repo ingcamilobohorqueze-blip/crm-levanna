@@ -172,6 +172,23 @@ function Dashboard() {
   useEffect(() => {
     if (selectedLead && activeTab !== 'todos') {
       loadTimeline(selectedLead.id_lead);
+
+      // Suscripción en Tiempo Real a las vistas e interacciones del cliente
+      const channel = supabase
+        .channel(`timeline_${selectedLead.id_lead}`)
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'historial_interacciones',
+          filter: `id_lead=eq.${selectedLead.id_lead}`
+        }, (payload) => {
+          setTimeline(prev => [payload.new, ...prev]);
+        })
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [selectedLead, activeTab]);
 
