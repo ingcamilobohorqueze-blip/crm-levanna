@@ -341,6 +341,47 @@ function Dashboard() {
     }
   };
 
+  const renderCardBadge = (lead: any) => {
+    switch (lead.estado_comercial) {
+      case 'Cerrado_Ganado':
+        return (
+          <span className="badge" style={{ background: 'rgba(34, 197, 94, 0.25)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.4)', fontWeight: 700 }}>
+            🟢 Cerrado (Ganado)
+          </span>
+        );
+      case 'Cerrado_Perdido':
+        return (
+          <span className="badge" style={{ background: 'rgba(148, 163, 184, 0.2)', color: '#94a3b8', border: '1px solid rgba(148, 163, 184, 0.3)', fontWeight: 600 }}>
+            ⚪ Cerrado (Perdido)
+          </span>
+        );
+      case 'Propuesta_Enviada':
+        return (
+          <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.25)', color: '#93c5fd', border: '1px solid rgba(59, 130, 246, 0.4)' }}>
+            📄 Propuesta Enviada
+          </span>
+        );
+      case 'Reunión_Agendada':
+        return (
+          <span className="badge" style={{ background: 'rgba(168, 85, 247, 0.25)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.4)' }}>
+            📅 Reunión Agendada
+          </span>
+        );
+      case 'Contactado':
+        return (
+          <span className="badge" style={{ background: 'rgba(234, 179, 8, 0.25)', color: '#fde047', border: '1px solid rgba(234, 179, 8, 0.4)' }}>
+            💬 Contactado
+          </span>
+        );
+      default:
+        return (
+          <span className={`badge ${getTierColor(lead.temperatura_tier)}`}>
+            {lead.temperatura_tier}
+          </span>
+        );
+    }
+  };
+
   const handleStatusChange = async (newStatus: string) => {
     if (!selectedLead) return;
     const updatedLeads = leads.map(l => l.id_lead === selectedLead.id_lead ? { ...l, estado_comercial: newStatus } : l);
@@ -654,22 +695,7 @@ function Dashboard() {
                     onClick={() => { setActiveTab('bandeja'); setSelectedLead(lead); }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                        {lead.estado_comercial === 'Cerrado_Ganado' ? (
-                          <span className="badge" style={{ background: 'rgba(34, 197, 94, 0.25)', color: '#4ade80', border: '1px solid rgba(34, 197, 94, 0.4)', fontWeight: 700 }}>
-                            🎉 CERRADO GANADO
-                          </span>
-                        ) : lead.estado_comercial === 'Propuesta_Enviada' ? (
-                          <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.25)', color: '#93c5fd', border: '1px solid rgba(59, 130, 246, 0.4)' }}>
-                            📄 PROPUESTA
-                          </span>
-                        ) : (
-                          <span className={`badge ${getTierColor(lead.temperatura_tier)}`}>{lead.temperatura_tier}</span>
-                        )}
-                        {lead.estado_comercial === 'Cerrado_Ganado' && (
-                          <span className={`badge ${getTierColor(lead.temperatura_tier)}`}>{lead.temperatura_tier}</span>
-                        )}
-                      </div>
+                      {renderCardBadge(lead)}
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                         {formatDistanceToNow(new Date(lead.created_at), { addSuffix: true, locale: es })}
                       </span>
@@ -726,19 +752,19 @@ function Dashboard() {
                         padding: '0.5rem 1rem', 
                         fontSize: '0.875rem', 
                         fontWeight: 700, 
-                        background: selectedLead.estado_comercial === 'Cerrado_Ganado' ? 'rgba(34, 197, 94, 0.25)' : 'rgba(59, 130, 246, 0.2)', 
-                        color: selectedLead.estado_comercial === 'Cerrado_Ganado' ? '#4ade80' : '#93c5fd', 
-                        border: selectedLead.estado_comercial === 'Cerrado_Ganado' ? '1px solid rgba(34, 197, 94, 0.5)' : '1px solid rgba(59, 130, 246, 0.4)',
+                        background: selectedLead.estado_comercial === 'Cerrado_Ganado' ? 'rgba(34, 197, 94, 0.25)' : selectedLead.estado_comercial === 'Cerrado_Perdido' ? 'rgba(148, 163, 184, 0.2)' : 'rgba(59, 130, 246, 0.2)', 
+                        color: selectedLead.estado_comercial === 'Cerrado_Ganado' ? '#4ade80' : selectedLead.estado_comercial === 'Cerrado_Perdido' ? '#94a3b8' : '#93c5fd', 
+                        border: selectedLead.estado_comercial === 'Cerrado_Ganado' ? '1px solid rgba(34, 197, 94, 0.5)' : selectedLead.estado_comercial === 'Cerrado_Perdido' ? '1px solid rgba(148, 163, 184, 0.4)' : '1px solid rgba(59, 130, 246, 0.4)',
                         borderRadius: '6px',
                         cursor: 'pointer'
                       }}
                     >
-                      <option value="Nuevo">Nuevo</option>
-                      <option value="Contactado">Contactado</option>
-                      <option value="Reunión_Agendada">Reunión Agendada</option>
-                      <option value="Propuesta_Enviada">Propuesta Enviada</option>
-                      <option value="Cerrado_Ganado">🎉 Cerrado Ganado</option>
-                      <option value="Cerrado_Perdido">❌ Cerrado Perdido</option>
+                      <option value="Nuevo" style={{ background: '#0f172a', color: '#f8fafc' }}>Nuevo</option>
+                      <option value="Contactado" style={{ background: '#0f172a', color: '#fde047' }}>💬 Contactado</option>
+                      <option value="Reunión_Agendada" style={{ background: '#0f172a', color: '#c084fc' }}>📅 Reunión Agendada</option>
+                      <option value="Propuesta_Enviada" style={{ background: '#0f172a', color: '#93c5fd' }}>📄 Propuesta Enviada</option>
+                      <option value="Cerrado_Ganado" style={{ background: '#0f172a', color: '#4ade80', fontWeight: 'bold' }}>🟢 Cerrado (Ganado)</option>
+                      <option value="Cerrado_Perdido" style={{ background: '#0f172a', color: '#94a3b8' }}>⚪ Cerrado (Perdido)</option>
                     </select>
                   </div>
 
