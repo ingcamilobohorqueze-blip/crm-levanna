@@ -366,7 +366,9 @@ function Dashboard() {
 
     let trackableUrl = linkUrl;
     if (linkUrl.includes('presentacion-pre.vercel.app')) {
-      trackableUrl = `https://levanna-tenant-hub-presentacion-pre.vercel.app/?client=${encodeURIComponent(clientName)}&commercial=${encodeURIComponent(currentAdvisorName)}&commercialId=${encodeURIComponent(currentAdvisorId)}&prospectId=${encodeURIComponent(prospectId)}`;
+      const advisorData = asesores.find(a => a.id_usuario === currentAdvisorId);
+      const calLink = advisorData?.cal_link || 'https://cal.com/emmanuel-arias-vafucp/15min?overlayCalendar=true';
+      trackableUrl = `https://levanna-tenant-hub-presentacion-pre.vercel.app/?client=${encodeURIComponent(clientName)}&commercial=${encodeURIComponent(currentAdvisorName)}&commercialId=${encodeURIComponent(currentAdvisorId)}&prospectId=${encodeURIComponent(prospectId)}&calLink=${encodeURIComponent(calLink)}`;
     } else {
       const separator = linkUrl.includes('?') ? '&' : '?';
       trackableUrl = `${linkUrl}${separator}ref_asesor=${currentAdvisorId}&asesor=${encodeURIComponent(currentAdvisorName)}&origen=Cotizador_Propuesta`;
@@ -544,7 +546,10 @@ function Dashboard() {
     const currentAdvisorName = userAlias || 'Asesor';
     const clientName = lead.empresa || lead.nombre_completo;
 
-    const pitchUrl = `https://levanna-tenant-hub-presentacion-pre.vercel.app/?client=${encodeURIComponent(clientName)}&commercial=${encodeURIComponent(currentAdvisorName)}&commercialId=${encodeURIComponent(currentAdvisorId)}&prospectId=${encodeURIComponent(lead.id_lead)}`;
+    const advisorData = asesores.find(a => a.id_usuario === currentAdvisorId);
+    const calLink = advisorData?.cal_link || 'https://cal.com/emmanuel-arias-vafucp/15min?overlayCalendar=true';
+
+    const pitchUrl = `https://levanna-tenant-hub-presentacion-pre.vercel.app/?client=${encodeURIComponent(clientName)}&commercial=${encodeURIComponent(currentAdvisorName)}&commercialId=${encodeURIComponent(currentAdvisorId)}&prospectId=${encodeURIComponent(lead.id_lead)}&calLink=${encodeURIComponent(calLink)}`;
 
     const message = `Hola ${lead.nombre_completo}, te comparto nuestra Presentación Premium interactiva de Levanna DC para ${clientName}:\n\n${pitchUrl}\n\nQuedo atento a tus comentarios para cualquier inquietud.`;
     
