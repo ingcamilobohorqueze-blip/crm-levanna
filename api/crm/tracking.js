@@ -67,46 +67,53 @@ export default async function handler(req, res) {
     }
 
     const leadIdValid = isValidUUID(prospectId) ? prospectId : null;
-    const commercialIdValid = isValidUUID(commercialId) ? commercialId : null;
+    let validAsesorId = null;
 
     if (!leadIdValid) {
       console.warn('[CRM Tracking API] Se recibió evento sin prospectId válido:', prospectId);
       return res.status(400).json({ error: 'Invalid or missing prospectId UUID' });
     }
 
-    // Intentar primero con la función RPC log_telemetry (SECURITY DEFINER para omitir RLS)
+    // Validar si el commercialId existe en usuarios_comerciales para evitar error de Foreign Key Constraint
+    if (isValidUUID(commercialId)) {
+      const { data: userCheck } = await supabase
+        .from('usuarios_comerciales')
+        .select('id_usuario')
+        .eq('id_usuario', commercialId)
+        .maybeSingle();
+
+      if (userCheck) {
+        validAsesorId = userCheck.id_usuario;
+      }
+    }
+
+    // Si no se encontró el comercial enviado, consultar el asignado al lead en leads_master
+    if (!validAsesorId) {
+      const { data: leadCheck } = await supabase
+        .from('leads_master')
+        .select('comercial_asignado')
+        .eq('id_lead', leadIdValid)
+        .maybeSingle();
+
+      if (leadCheck && leadCheck.comercial_asignado) {
+        validAsesorId = leadCheck.comercial_asignado;
+      }
+    }
+
+    // Invocar la función RPC log_telemetry (SECURITY DEFINER para omitir RLS)
     const { data: rpcData, error: rpcErr } = await supabase.rpc('log_telemetry', {
       p_lead_id: leadIdValid,
-      p_asesor_id: commercialIdValid,
+      p_asesor_id: validAsesorId,
       p_tipo_accion: 'Presentación Premium',
       p_nota: notaText
     });
 
     if (rpcErr) {
-      console.warn('[CRM Tracking API] RPC log_telemetry falló, intentando inserción directa:', rpcErr);
-      const { data: insData, error: insErr } = await supabase
-        .from('historial_interacciones')
-        .insert([{
-          id_lead: leadIdValid,
-          id_usuario: commercialIdValid,
-          tipo_accion: 'Presentación Premium',
-          nota: notaText
-        }])
-        .select();
-
-      if (insErr) {
-        console.error('[CRM Tracking API] Error de inserción en Supabase:', insErr);
-        return res.status(500).json({ error: insErr.message });
-      }
-
-      return res.status(200).json({
-        success: true,
-        message: 'Telemetry event logged via direct insert',
-        interaction: insData ? insData[0] : null
-      });
+      console.error('[CRM Tracking API] RPC log_telemetry falló:', rpcErr);
+      return res.status(500).json({ error: rpcErr.message });
     }
 
-    console.log(`[CRM Tracking API] Registrado evento ${eventType} vía RPC log_telemetry para lead ${leadIdValid}`);
+    console.log(`[CRM Tracking API] Evento ${eventType} registrado exitosamente para lead ${leadIdValid}`);
 
     return res.status(200).json({
       success: true,
