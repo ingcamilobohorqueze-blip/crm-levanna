@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://gyvdmasavjxuiabjrlki.supabase.co';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5dmRtYXNhdmp4dWlhYmpybGtpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3OTM4ODcsImV4cCI6MjA5NzM2OTg4N30.2U2qGQ43jLMOk1L2REcQtDAnjAvnU0LM86-CKbkpZ5o';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd5dmRtYXNhdmp4dWlhYmpybGtpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3OTM4ODcsImV4cCI6MjA5NzM2OTg4N30.2U2qGQ43jLMOk1L2REcQtDAnjAvnU0LM86-CKbkpZ5o';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 function isValidUUID(uuid) {
   if (!uuid || typeof uuid !== 'string') return false;
@@ -74,33 +74,24 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Invalid or missing prospectId UUID' });
     }
 
-    // Validar si el commercialId existe en usuarios_comerciales para evitar error de Foreign Key Constraint
+    // Validar defensivamente el commercialId contra usuarios_comerciales
     if (isValidUUID(commercialId)) {
-      const { data: userCheck } = await supabase
-        .from('usuarios_comerciales')
-        .select('id_usuario')
-        .eq('id_usuario', commercialId)
-        .maybeSingle();
+      try {
+        const { data: userCheck } = await supabase
+          .from('usuarios_comerciales')
+          .select('id_usuario')
+          .eq('id_usuario', commercialId)
+          .maybeSingle();
 
-      if (userCheck) {
-        validAsesorId = userCheck.id_usuario;
+        if (userCheck) {
+          validAsesorId = userCheck.id_usuario;
+        }
+      } catch (e) {
+        console.warn('[CRM Tracking API] Error verificando usuario comercial:', e);
       }
     }
 
-    // Si no se encontró el comercial enviado, consultar el asignado al lead en leads_master
-    if (!validAsesorId) {
-      const { data: leadCheck } = await supabase
-        .from('leads_master')
-        .select('comercial_asignado')
-        .eq('id_lead', leadIdValid)
-        .maybeSingle();
-
-      if (leadCheck && leadCheck.comercial_asignado) {
-        validAsesorId = leadCheck.comercial_asignado;
-      }
-    }
-
-    // Invocar la función RPC log_telemetry (SECURITY DEFINER para omitir RLS)
+    // Invocar directamente la función RPC log_telemetry (SECURITY DEFINER omite RLS)
     const { data: rpcData, error: rpcErr } = await supabase.rpc('log_telemetry', {
       p_lead_id: leadIdValid,
       p_asesor_id: validAsesorId,
