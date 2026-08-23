@@ -155,10 +155,13 @@ function Dashboard() {
   // Library State
   const [libraryLinks] = useState([
     { id: 1, title: 'Generador de propuestas', type: 'doc', url: 'https://levanna-tenant-hub-hub.vercel.app/cotizador_comercial.html' },
-    { id: 2, title: 'Presentación Premium', type: 'doc', url: '#' },
+    { id: 2, title: 'Presentación Premium (Pitch)', type: 'doc', url: 'https://levanna-tenant-hub-presentacion-pre.vercel.app/' },
     { id: 3, title: 'Manejo de Objeciones', type: 'chat', url: '#' },
     { id: 4, title: 'Carpeta Drive Completa', type: 'folder', url: '#' }
   ]);
+
+  // Telemetría & Alertas Realtime Presentación Premium
+  const [livePitchAlert, setLivePitchAlert] = useState<{ clientName: string; leadId: string; note: string; phone?: string } | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -207,6 +210,54 @@ function Dashboard() {
       };
     }
   }, [selectedLead, activeTab]);
+
+  // Suscripción Global Realtime para Alertas de la Presentación Premium
+  useEffect(() => {
+    if (session?.user?.id) {
+      const globalChannel = supabase
+        .channel('global_telemetry_pitch_alerts')
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'historial_interacciones'
+        }, async (payload) => {
+          const newInteraction = payload.new;
+          if (newInteraction?.tipo_accion === 'Presentación Premium') {
+            const { data: leadData } = await supabase
+              .from('leads_master')
+              .select('nombre_completo, empresa, telefono_whatsapp, comercial_asignado')
+              .eq('id_lead', newInteraction.id_lead)
+              .single();
+
+            if (leadData && (userRole === 'admin' || leadData.comercial_asignado === session.user.id)) {
+              const clientName = leadData.empresa || leadData.nombre_completo;
+              setLivePitchAlert({
+                clientName,
+                leadId: newInteraction.id_lead,
+                note: newInteraction.nota,
+                phone: leadData.telefono_whatsapp
+              });
+
+              if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                new Notification(`🔥 ¡Atención! Tu cliente ${clientName} está revisando la propuesta`, {
+                  body: newInteraction.nota,
+                  icon: '/logo-blue.png'
+                });
+              }
+            }
+          }
+        })
+        .subscribe();
+
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+
+      return () => {
+        supabase.removeChannel(globalChannel);
+      };
+    }
+  }, [session, userRole]);
 
   const checkUserRole = async (userId: string) => {
     const { data, error } = await supabase.from('usuarios_comerciales').select('rol, nombre').eq('id_usuario', userId).single();
@@ -305,17 +356,24 @@ function Dashboard() {
   const copyTrackableLink = (linkUrl: string, linkTitle: string) => {
     const currentAdvisorId = session?.user?.id || '';
     const currentAdvisorName = userAlias || 'Asesor';
-    
+    const clientName = selectedLead ? (selectedLead.empresa || selectedLead.nombre_completo) : 'Cliente';
+    const prospectId = selectedLead ? selectedLead.id_lead : '';
+
     if (!linkUrl || linkUrl === '#') {
       alert('Este recurso no posee una URL externa configurada.');
       return;
     }
 
-    const separator = linkUrl.includes('?') ? '&' : '?';
-    const trackableUrl = `${linkUrl}${separator}ref_asesor=${currentAdvisorId}&asesor=${encodeURIComponent(currentAdvisorName)}&origen=Cotizador_Propuesta`;
+    let trackableUrl = linkUrl;
+    if (linkUrl.includes('presentacion-pre.vercel.app')) {
+      trackableUrl = `https://levanna-tenant-hub-presentacion-pre.vercel.app/?client=${encodeURIComponent(clientName)}&commercial=${encodeURIComponent(currentAdvisorName)}&commercialId=${encodeURIComponent(currentAdvisorId)}&prospectId=${encodeURIComponent(prospectId)}`;
+    } else {
+      const separator = linkUrl.includes('?') ? '&' : '?';
+      trackableUrl = `${linkUrl}${separator}ref_asesor=${currentAdvisorId}&asesor=${encodeURIComponent(currentAdvisorName)}&origen=Cotizador_Propuesta`;
+    }
     
     navigator.clipboard.writeText(trackableUrl);
-    alert(`¡Link Trazable Copiado!\n\nRecurso: ${linkTitle}\nEnlace: ${trackableUrl}\n\nCuando el cliente abra y complete este formulario, se inyectará en el CRM asignado automáticamente a: ${currentAdvisorName}.`);
+    alert(`¡Link Trazable Copiado!\n\nRecurso: ${linkTitle}\nEnlace: ${trackableUrl}\n\nCuando el cliente abra y revise esta propuesta, los eventos se registrarán en tiempo real en tu CRM.`);
   };
 
   const loadLeads = async () => {
@@ -480,6 +538,34 @@ function Dashboard() {
     loadTimeline(lead.id_lead);
   };
 
+  const handleSendPitchPresentation = async (lead: any) => {
+    if (!lead || !session) return;
+    const currentAdvisorId = session.user.id;
+    const currentAdvisorName = userAlias || 'Asesor';
+    const clientName = lead.empresa || lead.nombre_completo;
+
+    const pitchUrl = `https://levanna-tenant-hub-presentacion-pre.vercel.app/?client=${encodeURIComponent(clientName)}&commercial=${encodeURIComponent(currentAdvisorName)}&commercialId=${encodeURIComponent(currentAdvisorId)}&prospectId=${encodeURIComponent(lead.id_lead)}`;
+
+    const message = `Hola ${lead.nombre_completo}, te comparto nuestra Presentación Premium interactiva de Levanna DC para ${clientName}:\n\n${pitchUrl}\n\nQuedo atento a tus comentarios para cualquier inquietud.`;
+    
+    window.open(`https://wa.me/${lead.telefono_whatsapp?.replace(/\+/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
+
+    await supabase.from('historial_interacciones').insert([{
+      id_lead: lead.id_lead,
+      id_usuario: session.user.id,
+      tipo_accion: 'Envío Presentación Premium',
+      nota: `Se compartió la Presentación Premium por WhatsApp con link personalizado.`
+    }]);
+
+    if (lead.estado_comercial !== 'Propuesta_Enviada') {
+      await supabase.from('leads_master').update({ estado_comercial: 'Propuesta_Enviada' }).eq('id_lead', lead.id_lead);
+      setSelectedLead({ ...lead, estado_comercial: 'Propuesta_Enviada' });
+      setLeads(leads.map(l => l.id_lead === lead.id_lead ? { ...l, estado_comercial: 'Propuesta_Enviada' } : l));
+    }
+
+    loadTimeline(lead.id_lead);
+  };
+
   const copyTemplate = async (template: any) => {
     if (!selectedLead || !session) return;
     const currentAdvisorId = session.user.id;
@@ -620,6 +706,61 @@ function Dashboard() {
 
       {/* Main Content */}
       <main className="main-content">
+        {/* Banner de Alerta en Tiempo Real de la Presentación Premium */}
+        {livePitchAlert && (
+          <div style={{
+            background: 'linear-gradient(90deg, #dc2626 0%, #b91c1c 100%)',
+            color: '#ffffff',
+            padding: '1rem 1.5rem',
+            borderRadius: '12px',
+            marginBottom: '1.5rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            boxShadow: '0 10px 25px rgba(220, 38, 38, 0.4)',
+            border: '1px solid rgba(255, 255, 255, 0.3)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <span style={{ fontSize: '1.8rem' }}>🔥</span>
+              <div>
+                <strong style={{ fontSize: '1.05rem', display: 'block' }}>
+                  ¡Atención! Tu cliente {livePitchAlert.clientName} está revisando la propuesta en este momento
+                </strong>
+                <p style={{ margin: 0, fontSize: '0.875rem', opacity: 0.9 }}>{livePitchAlert.note}</p>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+              {livePitchAlert.phone && (
+                <button
+                  onClick={() => window.open(`https://wa.me/${livePitchAlert.phone?.replace(/\+/g, '')}?text=${encodeURIComponent(`Hola ${livePitchAlert.clientName}, noté que estás revisando la propuesta. ¿Tienes alguna inquietud que podamos resolver de una vez?`)}`, '_blank')}
+                  style={{
+                    background: '#25D366',
+                    color: '#fff',
+                    border: 'none',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '6px',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    fontSize: '0.85rem'
+                  }}
+                >
+                  <MessageCircle size={16} /> Chat WhatsApp
+                </button>
+              )}
+              <button
+                onClick={() => setLivePitchAlert(null)}
+                style={{ background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '1.2rem', padding: '0.2rem' }}
+                title="Cerrar alerta"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h1>
@@ -1042,17 +1183,22 @@ function Dashboard() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '2rem' }}>
-                    <button onClick={() => handleWhatsApp(selectedLead)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: '#25D366', color: '#fff', border: 'none', padding: '0.75rem', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
-                      <MessageCircle size={18} /> Chat WhatsApp
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '2rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                      <button onClick={() => handleWhatsApp(selectedLead)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: '#25D366', color: '#fff', border: 'none', padding: '0.75rem', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
+                        <MessageCircle size={18} /> Chat WhatsApp
+                      </button>
+                      <button onClick={() => handleSendProposal(selectedLead)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'var(--accent-color)', color: '#fff', border: 'none', padding: '0.75rem', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
+                        <Share2 size={18} /> Enviar Cotización Directa
+                      </button>
+                    </div>
+                    <button onClick={() => handleSendPitchPresentation(selectedLead)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: '#e11d48', color: '#fff', border: 'none', padding: '0.75rem', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', fontSize: '0.95rem', boxShadow: '0 4px 12px rgba(225, 29, 72, 0.25)' }}>
+                      <Share2 size={18} /> 🔥 Enviar Presentación Premium
                     </button>
-                    <button onClick={() => handleSendProposal(selectedLead)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'var(--accent-color)', color: '#fff', border: 'none', padding: '0.75rem', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
-                      <Share2 size={18} /> Enviar Cotización Directa
-                    </button>
-                    <button onClick={() => openCotizadorHub(selectedLead)} style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#93c5fd', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '0.65rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem' }}>
+                    <button onClick={() => openCotizadorHub(selectedLead)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#93c5fd', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '0.65rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem' }}>
                       <Settings size={16} /> ⚙️ Personalizar en Cotizador Hub (Asesor)
                     </button>
-                    <button onClick={() => setShowTemplatesModal(true)} style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', padding: '0.6rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
+                    <button onClick={() => setShowTemplatesModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', padding: '0.6rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
                       <Mail size={16} /> Plantillas de Correo
                     </button>
                   </div>
