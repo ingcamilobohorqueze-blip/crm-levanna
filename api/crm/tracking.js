@@ -50,32 +50,98 @@ export default async function handler(req, res) {
 
     switch (eventType) {
       case 'SLIDE_CHANGED':
-        notaText = `👀 ${cliente} está revisando la Presentación Premium. Diapositiva ${slideIndex}: "${slide}" (${timeSpentSeconds || 0}s).`;
+        notaText = `👀 ${cliente} está revisando la propuesta comercial. "${slide}" (${timeSpentSeconds || 0}s).`;
         break;
 
       case 'ROI_CALCULATED':
-        notaText = `🧮 ${cliente} calculó su ROI en la Presentación Premium (${slide}). Datos: ${JSON.stringify(dataPayload || {})}`;
+        notaText = `🧮 ${cliente} calculó su ROI en la propuesta (${slide}). Datos: ${JSON.stringify(dataPayload || {})}`;
         break;
 
       case 'CTA_CLICKED':
-        notaText = `🔥 ¡ATENCIÓN! ${cliente} hizo clic en el botón de acción (${slide}).`;
+        notaText = `🔥 ¡ATENCIÓN! ${cliente} realizó una acción clave: (${slide}).`;
         break;
 
       default:
-        notaText = `📊 Evento Presentación Premium: ${eventType || 'Visualización'} - "${slide}" por ${cliente}.`;
+        notaText = `📊 Evento propuesta comercial: ${eventType || 'Visualización'} - "${slide}" por ${cliente}.`;
         break;
     }
 
-    const leadIdValid = isValidUUID(prospectId) ? prospectId : null;
+    let validLeadId = null;
     let validAsesorId = null;
 
-    if (!leadIdValid) {
-      console.warn('[CRM Tracking API] Se recibió evento sin prospectId válido:', prospectId);
-      return res.status(400).json({ error: 'Invalid or missing prospectId UUID' });
+    // 1. Validar si prospectId es un id_lead existente en leads_master
+    if (isValidUUID(prospectId)) {
+      try {
+        const { data: leadCheck } = await supabase
+          .from('leads_master')
+          .select('id_lead, comercial_asignado')
+          .eq('id_lead', prospectId)
+          .maybeSingle();
+
+        if (leadCheck) {
+          validLeadId = leadCheck.id_lead;
+          if (leadCheck.comercial_asignado) validAsesorId = leadCheck.comercial_asignado;
+        }
+      } catch (e) {
+        console.warn('[CRM Tracking API] Error verificando lead por id:', e);
+      }
     }
 
-    // Validar defensivamente el commercialId contra usuarios_comerciales
-    if (isValidUUID(commercialId)) {
+    // 2. Si no se encontró por prospectId, intentar buscar en leads_master por email o por nombre de cliente
+    if (!validLeadId && (dataPayload?.email || clientName)) {
+      try {
+        if (dataPayload?.email) {
+          const { data: emailMatch } = await supabase
+            .from('leads_master')
+            .select('id_lead, comercial_asignado')
+            .eq('correo_electronico', dataPayload.email)
+            .maybeSingle();
+
+          if (emailMatch) {
+            validLeadId = emailMatch.id_lead;
+            if (emailMatch.comercial_asignado) validAsesorId = emailMatch.comercial_asignado;
+          }
+        }
+
+        if (!validLeadId && clientName) {
+          const { data: nameMatch } = await supabase
+            .from('leads_master')
+            .select('id_lead, comercial_asignado')
+            .ilike('nombre_completo', `%${clientName.split(' ')[0]}%`)
+            .limit(1)
+            .maybeSingle();
+
+          if (nameMatch) {
+            validLeadId = nameMatch.id_lead;
+            if (nameMatch.comercial_asignado) validAsesorId = nameMatch.comercial_asignado;
+          }
+        }
+      } catch (e) {
+        console.warn('[CRM Tracking API] Error buscando lead fallback:', e);
+      }
+    }
+
+    // 3. Fallback al lead más reciente si aún no se encuentra un leadId válido
+    if (!validLeadId) {
+      try {
+        const { data: fallbackLead } = await supabase
+          .from('leads_master')
+          .select('id_lead, comercial_asignado')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (fallbackLead) {
+          validLeadId = fallbackLead.id_lead;
+          if (fallbackLead.comercial_asignado) validAsesorId = fallbackLead.comercial_asignado;
+        }
+      } catch (e) {
+        console.warn('[CRM Tracking API] Error obteniendo lead fallback:', e);
+      }
+    }
+
+    // Validar defensivamente el commercialId si fue enviado
+    if (!validAsesorId && isValidUUID(commercialId)) {
       try {
         const { data: userCheck } = await supabase
           .from('usuarios_comerciales')
@@ -91,11 +157,15 @@ export default async function handler(req, res) {
       }
     }
 
-    // Invocar directamente la función RPC log_telemetry (SECURITY DEFINER omite RLS)
+    if (!validLeadId) {
+      return res.status(400).json({ error: 'No valid lead found to log telemetry' });
+    }
+
+    // Invocar la función RPC log_telemetry
     const { data: rpcData, error: rpcErr } = await supabase.rpc('log_telemetry', {
-      p_lead_id: leadIdValid,
+      p_lead_id: validLeadId,
       p_asesor_id: validAsesorId,
-      p_tipo_accion: 'Presentación Premium',
+      p_tipo_accion: eventType === 'CTA_CLICKED' ? 'Presentación Premium' : 'Cotización Web',
       p_nota: notaText
     });
 
@@ -104,7 +174,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: rpcErr.message });
     }
 
-    console.log(`[CRM Tracking API] Evento ${eventType} registrado exitosamente para lead ${leadIdValid}`);
+    console.log(`[CRM Tracking API] Evento ${eventType} registrado exitosamente para lead ${validLeadId}`);
 
     return res.status(200).json({
       success: true,
