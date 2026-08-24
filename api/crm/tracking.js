@@ -69,75 +69,8 @@ export default async function handler(req, res) {
     let validLeadId = null;
     let validAsesorId = null;
 
-    // 1. Validar si prospectId es un id_lead existente en leads_master
-    if (isValidUUID(prospectId)) {
-      try {
-        const { data: leadCheck } = await supabase
-          .from('leads_master')
-          .select('id_lead, comercial_asignado')
-          .eq('id_lead', prospectId);
-
-        if (leadCheck && leadCheck.length > 0) {
-          validLeadId = leadCheck[0].id_lead;
-          if (leadCheck[0].comercial_asignado) validAsesorId = leadCheck[0].comercial_asignado;
-        }
-      } catch (e) {
-        console.warn('[CRM Tracking API] Error verificando lead por id:', e);
-      }
-    }
-
-    // 2. Si no se encontró por prospectId, intentar buscar en leads_master por email o por nombre de cliente
-    if (!validLeadId && (dataPayload?.email || clientName)) {
-      try {
-        if (dataPayload?.email) {
-          const { data: emailMatch } = await supabase
-            .from('leads_master')
-            .select('id_lead, comercial_asignado')
-            .eq('correo_electronico', dataPayload.email);
-
-          if (emailMatch && emailMatch.length > 0) {
-            validLeadId = emailMatch[0].id_lead;
-            if (emailMatch[0].comercial_asignado) validAsesorId = emailMatch[0].comercial_asignado;
-          }
-        }
-
-        if (!validLeadId && clientName) {
-          const firstWord = clientName.split(' ')[0];
-          const { data: nameMatch } = await supabase
-            .from('leads_master')
-            .select('id_lead, comercial_asignado')
-            .ilike('nombre_completo', `%${firstWord}%`);
-
-          if (nameMatch && nameMatch.length > 0) {
-            validLeadId = nameMatch[0].id_lead;
-            if (nameMatch[0].comercial_asignado) validAsesorId = nameMatch[0].comercial_asignado;
-          }
-        }
-      } catch (e) {
-        console.warn('[CRM Tracking API] Error buscando lead fallback:', e);
-      }
-    }
-
-    // 3. Fallback al lead más reciente si aún no se encuentra un leadId válido
-    if (!validLeadId) {
-      try {
-        const { data: fallbackLead } = await supabase
-          .from('leads_master')
-          .select('id_lead, comercial_asignado')
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (fallbackLead && fallbackLead.length > 0) {
-          validLeadId = fallbackLead[0].id_lead;
-          if (fallbackLead[0].comercial_asignado) validAsesorId = fallbackLead[0].comercial_asignado;
-        }
-      } catch (e) {
-        console.warn('[CRM Tracking API] Error obteniendo lead fallback:', e);
-      }
-    }
-
     // Validar defensivamente el commercialId si fue enviado
-    if (!validAsesorId && isValidUUID(commercialId)) {
+    if (isValidUUID(commercialId)) {
       try {
         const { data: userCheck } = await supabase
           .from('usuarios_comerciales')
@@ -152,6 +85,113 @@ export default async function handler(req, res) {
       }
     }
 
+    // 1. Validar si prospectId es un id_lead existente en leads_master
+    if (isValidUUID(prospectId)) {
+      try {
+        const { data: leadCheck } = await supabase
+          .from('leads_master')
+          .select('id_lead, comercial_asignado')
+          .eq('id_lead', prospectId);
+
+        if (leadCheck && leadCheck.length > 0) {
+          validLeadId = leadCheck[0].id_lead;
+          if (!validAsesorId && leadCheck[0].comercial_asignado) {
+            validAsesorId = leadCheck[0].comercial_asignado;
+          }
+        }
+      } catch (e) {
+        console.warn('[CRM Tracking API] Error verificando lead por id:', e);
+      }
+    }
+
+    // 2. Buscar en leads_master por email o por coincidencia de nombre
+    if (!validLeadId && (dataPayload?.email || clientName)) {
+      try {
+        if (dataPayload?.email) {
+          const { data: emailMatch } = await supabase
+            .from('leads_master')
+            .select('id_lead, comercial_asignado')
+            .eq('correo_electronico', dataPayload.email);
+
+          if (emailMatch && emailMatch.length > 0) {
+            validLeadId = emailMatch[0].id_lead;
+            if (!validAsesorId && emailMatch[0].comercial_asignado) {
+              validAsesorId = emailMatch[0].comercial_asignado;
+            }
+          }
+        }
+
+        if (!validLeadId && clientName) {
+          const firstWord = clientName.trim().split(' ')[0];
+          const { data: nameMatch } = await supabase
+            .from('leads_master')
+            .select('id_lead, comercial_asignado')
+            .ilike('nombre_completo', `%${firstWord}%`);
+
+          if (nameMatch && nameMatch.length > 0) {
+            validLeadId = nameMatch[0].id_lead;
+            if (!validAsesorId && nameMatch[0].comercial_asignado) {
+              validAsesorId = nameMatch[0].comercial_asignado;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[CRM Tracking API] Error buscando lead por nombre/email:', e);
+      }
+    }
+
+    // 3. AUTO-INYECCIÓN: Si el lead no existe en el CRM, crearlo automáticamente para que aparezca en el Dashboard
+    if (!validLeadId) {
+      try {
+        const insertPayload = {
+          nombre_completo: clientName || 'Nuevo Prospecto',
+          empresa: clientName || 'Nuevo Prospecto',
+          origen_captura: 'Presentación Premium',
+          estado_comercial: 'Propuesta_Enviada',
+          comercial_asignado: validAsesorId || null
+        };
+
+        if (isValidUUID(prospectId)) {
+          insertPayload.id_lead = prospectId;
+        }
+
+        const { data: createdLead, error: createErr } = await supabase
+          .from('leads_master')
+          .insert([insertPayload])
+          .select('id_lead')
+          .single();
+
+        if (createdLead) {
+          validLeadId = createdLead.id_lead;
+          console.log(`[CRM Tracking API] Lead '${clientName}' creado automáticamente con id ${validLeadId}`);
+        } else if (createErr) {
+          console.warn('[CRM Tracking API] Error inyectando nuevo lead:', createErr);
+        }
+      } catch (e) {
+        console.warn('[CRM Tracking API] Excepción inyectando nuevo lead:', e);
+      }
+    }
+
+    // 4. Fallback final al lead más reciente si falló la creación
+    if (!validLeadId) {
+      try {
+        const { data: fallbackLead } = await supabase
+          .from('leads_master')
+          .select('id_lead, comercial_asignado')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (fallbackLead && fallbackLead.length > 0) {
+          validLeadId = fallbackLead[0].id_lead;
+          if (!validAsesorId && fallbackLead[0].comercial_asignado) {
+            validAsesorId = fallbackLead[0].comercial_asignado;
+          }
+        }
+      } catch (e) {
+        console.warn('[CRM Tracking API] Error obteniendo lead fallback final:', e);
+      }
+    }
+
     if (!validLeadId) {
       return res.status(400).json({ error: 'No valid lead found to log telemetry' });
     }
@@ -160,7 +200,7 @@ export default async function handler(req, res) {
     const { data: rpcData, error: rpcErr } = await supabase.rpc('log_telemetry', {
       p_lead_id: validLeadId,
       p_asesor_id: validAsesorId,
-      p_tipo_accion: eventType === 'CTA_CLICKED' ? 'Presentación Premium' : 'Cotización Web',
+      p_tipo_accion: eventType === 'CTA_CLICKED' ? 'Presentación Premium' : 'Presentación Premium',
       p_nota: notaText
     });
 
@@ -174,7 +214,8 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       message: 'Telemetry event logged successfully via RPC',
-      result: rpcData
+      result: rpcData,
+      registeredLeadId: validLeadId
     });
 
   } catch (err) {
