@@ -75,12 +75,11 @@ export default async function handler(req, res) {
         const { data: leadCheck } = await supabase
           .from('leads_master')
           .select('id_lead, comercial_asignado')
-          .eq('id_lead', prospectId)
-          .maybeSingle();
+          .eq('id_lead', prospectId);
 
-        if (leadCheck) {
-          validLeadId = leadCheck.id_lead;
-          if (leadCheck.comercial_asignado) validAsesorId = leadCheck.comercial_asignado;
+        if (leadCheck && leadCheck.length > 0) {
+          validLeadId = leadCheck[0].id_lead;
+          if (leadCheck[0].comercial_asignado) validAsesorId = leadCheck[0].comercial_asignado;
         }
       } catch (e) {
         console.warn('[CRM Tracking API] Error verificando lead por id:', e);
@@ -94,26 +93,24 @@ export default async function handler(req, res) {
           const { data: emailMatch } = await supabase
             .from('leads_master')
             .select('id_lead, comercial_asignado')
-            .eq('correo_electronico', dataPayload.email)
-            .maybeSingle();
+            .eq('correo_electronico', dataPayload.email);
 
-          if (emailMatch) {
-            validLeadId = emailMatch.id_lead;
-            if (emailMatch.comercial_asignado) validAsesorId = emailMatch.comercial_asignado;
+          if (emailMatch && emailMatch.length > 0) {
+            validLeadId = emailMatch[0].id_lead;
+            if (emailMatch[0].comercial_asignado) validAsesorId = emailMatch[0].comercial_asignado;
           }
         }
 
         if (!validLeadId && clientName) {
+          const firstWord = clientName.split(' ')[0];
           const { data: nameMatch } = await supabase
             .from('leads_master')
             .select('id_lead, comercial_asignado')
-            .ilike('nombre_completo', `%${clientName.split(' ')[0]}%`)
-            .limit(1)
-            .maybeSingle();
+            .ilike('nombre_completo', `%${firstWord}%`);
 
-          if (nameMatch) {
-            validLeadId = nameMatch.id_lead;
-            if (nameMatch.comercial_asignado) validAsesorId = nameMatch.comercial_asignado;
+          if (nameMatch && nameMatch.length > 0) {
+            validLeadId = nameMatch[0].id_lead;
+            if (nameMatch[0].comercial_asignado) validAsesorId = nameMatch[0].comercial_asignado;
           }
         }
       } catch (e) {
@@ -128,12 +125,11 @@ export default async function handler(req, res) {
           .from('leads_master')
           .select('id_lead, comercial_asignado')
           .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .limit(1);
 
-        if (fallbackLead) {
-          validLeadId = fallbackLead.id_lead;
-          if (fallbackLead.comercial_asignado) validAsesorId = fallbackLead.comercial_asignado;
+        if (fallbackLead && fallbackLead.length > 0) {
+          validLeadId = fallbackLead[0].id_lead;
+          if (fallbackLead[0].comercial_asignado) validAsesorId = fallbackLead[0].comercial_asignado;
         }
       } catch (e) {
         console.warn('[CRM Tracking API] Error obteniendo lead fallback:', e);
@@ -146,11 +142,10 @@ export default async function handler(req, res) {
         const { data: userCheck } = await supabase
           .from('usuarios_comerciales')
           .select('id_usuario')
-          .eq('id_usuario', commercialId)
-          .maybeSingle();
+          .eq('id_usuario', commercialId);
 
-        if (userCheck) {
-          validAsesorId = userCheck.id_usuario;
+        if (userCheck && userCheck.length > 0) {
+          validAsesorId = userCheck[0].id_usuario;
         }
       } catch (e) {
         console.warn('[CRM Tracking API] Error verificando usuario comercial:', e);
