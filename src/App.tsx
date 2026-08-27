@@ -4,6 +4,7 @@ import { supabase } from './lib/supabase';
 import { Bell, Search, MessageCircle, Mail, LayoutDashboard, Users, Settings, LogOut, Briefcase, Plus, X, BarChart3, Copy, BookOpen, Edit2, Link, UserPlus, Share2, ChevronDown, Filter } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { PlaybookReader } from './components/PlaybookReader';
 
 const TEMPLATES = [
   { id: 1, name: 'Primer Contacto (Frío)', subject: 'Mejora la gestión en tu empresa', body: 'Hola {nombre},\n\nHe notado que en {empresa} podrían beneficiarse de una solución para: {dolor}.\n\nMe gustaría mostrarte cómo Levanna puede ayudar. ¿Tienes 10 minutos el martes?\n\nSaludos,' },
@@ -106,7 +107,7 @@ function Dashboard() {
   const [userRole, setUserRole] = useState<'admin' | 'asesor' | null>(null);
   const [userAlias, setUserAlias] = useState('');
   
-  const [activeTab, setActiveTab] = useState<'bandeja'|'admin'|'todos'>('bandeja');
+  const [activeTab, setActiveTab] = useState<'bandeja'|'admin'|'todos'|'playbook'>('bandeja');
   const [leads, setLeads] = useState<any[]>([]);
   const [timeline, setTimeline] = useState<any[]>([]);
   const [asesores, setAsesores] = useState<any[]>([]);
@@ -691,6 +692,10 @@ function Dashboard() {
             <Users size={20} /> Todos los Clientes
           </a>
           
+          <a href="#" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', background: activeTab === 'playbook' ? 'var(--accent-color)' : 'transparent', color: activeTab === 'playbook' ? '#fff' : 'var(--text-secondary)' }} onClick={(e) => { e.preventDefault(); setActiveTab('playbook'); }}>
+            <BookOpen size={20} /> 📖 Playbook Comercial
+          </a>
+
           <a href="#" onClick={(e) => { e.preventDefault(); setShowLibraryModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', color: 'var(--text-secondary)' }}>
             <BookOpen size={20} /> Biblioteca de Recursos
           </a>
@@ -885,7 +890,11 @@ function Dashboard() {
           </div>
         </header>
 
-        {activeTab === 'todos' ? (
+        {activeTab === 'playbook' ? (
+          <div style={{ flex: 1, minHeight: 0 }}>
+            <PlaybookReader selectedLead={selectedLead} userAlias={userAlias} />
+          </div>
+        ) : activeTab === 'todos' ? (
           // Vista Todos Los Clientes (Tabla)
           // Vista Todos Los Clientes (Tabla con Filtros y Scroll Horizontal Suave)
           <section className="glass-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
@@ -1206,6 +1215,9 @@ function Dashboard() {
                     <button onClick={() => setShowTemplatesModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', padding: '0.6rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
                       <Mail size={16} /> Plantillas de Correo
                     </button>
+                    <button onClick={() => setActiveTab('playbook')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)', padding: '0.65rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem' }}>
+                      <BookOpen size={16} /> 📖 Consultar Playbook & Objeciones
+                    </button>
                   </div>
 
                   <h3 style={{ marginBottom: '1rem', fontSize: '1.2rem' }}>Línea de Tiempo</h3>
@@ -1319,6 +1331,32 @@ function Dashboard() {
             <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>Accede a documentos, cotizadores y guías. Genera tu enlace trazable para inyectar prospectos automáticamente a tu nombre.</p>
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
+              <div 
+                className="glass-card" 
+                onClick={() => { setShowLibraryModal(false); setActiveTab('playbook'); }}
+                style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center', 
+                  padding: '1.2rem 1.5rem', 
+                  background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(30, 41, 59, 0.8) 100%)',
+                  border: '1px solid rgba(59, 130, 246, 0.4)',
+                  cursor: 'pointer'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                  <div style={{ background: '#3b82f6', width: '44px', height: '44px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)' }}>
+                    <BookOpen size={22} color="#fff" />
+                  </div>
+                  <div>
+                    <h4 style={{ margin: '0 0 0.25rem 0', color: '#fff', fontSize: '1.05rem' }}>📖 Playbook de Ventas Corporativo (Revista Digital)</h4>
+                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#93c5fd' }}>Guión de prospección, correos pre-llenados, calculadora de comisiones y objeciones vs Fathom</p>
+                  </div>
+                </div>
+                <button style={{ padding: '0.5rem 1rem', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}>
+                  Abrir Revista 🚀
+                </button>
+              </div>
               {libraryLinks.map(link => (
                 <div key={link.id} className="glass-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1rem 1.5rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
