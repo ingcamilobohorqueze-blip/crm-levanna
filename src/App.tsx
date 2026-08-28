@@ -106,6 +106,7 @@ function Dashboard() {
   const [session, setSession] = useState<any>(null);
   const [userRole, setUserRole] = useState<'admin' | 'asesor' | null>(null);
   const [userAlias, setUserAlias] = useState('');
+  const [loadingAuth, setLoadingAuth] = useState(true);
   
   const [activeTab, setActiveTab] = useState<'bandeja'|'admin'|'todos'|'playbook'>('bandeja');
   const [leads, setLeads] = useState<any[]>([]);
@@ -164,29 +165,116 @@ function Dashboard() {
   // Telemetría & Alertas Realtime Presentación Premium
   const [livePitchAlert, setLivePitchAlert] = useState<{ clientName: string; leadId: string; note: string; phone?: string } | null>(null);
 
+  const loadUserDataAndLeads = async (userId: string, retries = 2) => {
+    let attempt = 0;
+    while (attempt <= retries) {
+      try {
+        // 1. Cargar perfil del usuario comercial
+        const { data: userData, error: userErr } = await supabase
+          .from('usuarios_comerciales')
+          .select('rol, nombre')
+          .eq('id_usuario', userId)
+          .maybeSingle();
+
+        if (userErr) {
+          console.warn(`Intento ${attempt + 1}: Error al consultar usuario (${userErr.message})`);
+          if (attempt < retries) {
+            await new Promise(r => setTimeout(r, 600));
+            attempt++;
+            continue;
+          }
+        }
+
+        if (userData) {
+          setUserRole(userData.rol);
+          setUserAlias(userData.nombre);
+          if (userData.rol === 'admin') {
+            setActiveTab('admin');
+          }
+        }
+
+        // 2. Cargar asesores
+        const { data: asesoresData } = await supabase
+          .from('usuarios_comerciales')
+          .select('*')
+          .eq('activo', true);
+        if (asesoresData) setAsesores(asesoresData);
+
+        // 3. Cargar leads
+        const { data: leadsData } = await supabase
+          .from('leads_master')
+          .select(`*, usuarios_comerciales(nombre)`)
+          .order('created_at', { ascending: false });
+
+        if (leadsData) {
+          setLeads(leadsData);
+          if (leadsData.length > 0) {
+            setSelectedLead((prev: any) => prev || leadsData[0]);
+          }
+        }
+
+        break; // Éxito
+      } catch (err) {
+        console.error(`Excepción en loadUserDataAndLeads (intento ${attempt + 1}):`, err);
+        if (attempt < retries) {
+          await new Promise(r => setTimeout(r, 600));
+          attempt++;
+        } else {
+          break;
+        }
+      }
+    }
+  };
+
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    let isMounted = true;
+
+    const initSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error || !session) {
+          if (isMounted) {
+            setLoadingAuth(false);
+            navigate('/login');
+          }
+          return;
+        }
+
+        if (isMounted) {
+          setSession(session);
+          await loadUserDataAndLeads(session.user.id);
+        }
+      } catch (err) {
+        console.error('Error durante la inicialización de sesión:', err);
+        if (isMounted) navigate('/login');
+      } finally {
+        if (isMounted) setLoadingAuth(false);
+      }
+    };
+
+    initSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!session) {
-        navigate('/login');
+        if (isMounted) {
+          setSession(null);
+          setUserAlias('');
+          setUserRole(null);
+          setLoadingAuth(false);
+          navigate('/login');
+        }
       } else {
-        setSession(session);
-        await checkUserRole(session.user.id);
-        loadAsesores();
-        loadLeads();
+        if (isMounted) setSession(session);
+        if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+          await loadUserDataAndLeads(session.user.id);
+        }
       }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!session) navigate('/login');
-      else {
-        setSession(session);
-        await checkUserRole(session.user.id);
-        loadAsesores();
-        loadLeads();
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, [navigate]);
 
   useEffect(() => {
@@ -259,25 +347,6 @@ function Dashboard() {
       };
     }
   }, [session, userRole]);
-
-  const checkUserRole = async (userId: string) => {
-    const { data, error } = await supabase.from('usuarios_comerciales').select('rol, nombre').eq('id_usuario', userId).single();
-    if (error) {
-      alert(`Error cargando usuario: ${error.message}. UUID: ${userId}`);
-    }
-    if (data) {
-      setUserRole(data.rol);
-      setUserAlias(data.nombre);
-      if (data.rol === 'admin') {
-        setActiveTab('admin');
-      }
-    }
-  };
-
-  const loadAsesores = async () => {
-    const { data } = await supabase.from('usuarios_comerciales').select('*').eq('activo', true);
-    if (data) setAsesores(data);
-  };
 
   const openInjectModal = () => {
     setInjectFormData({
@@ -666,6 +735,16 @@ function Dashboard() {
     );
   }).slice(0, 8);
 
+  if (loadingAuth) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: '1.2rem', background: 'var(--bg-primary)', color: '#fff' }}>
+        <img src="/logo-white.png" alt="CRM Logo" style={{ width: '70px', height: 'auto', objectFit: 'contain' }} onError={(e) => e.currentTarget.src = '/logo-blue.png'} />
+        <div style={{ width: '36px', height: '36px', border: '3px solid rgba(255,255,255,0.1)', borderTopColor: 'var(--accent-color)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', fontWeight: 500 }}>Iniciando sesión y cargando CRM...</p>
+      </div>
+    );
+  }
+
   if (!session) return null;
 
   return (
@@ -702,11 +781,23 @@ function Dashboard() {
         </nav>
 
         <div style={{ padding: '1.5rem 1rem', borderTop: '1px solid var(--glass-border)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-            <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+            <div style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', textTransform: 'uppercase', fontWeight: 'bold', flexShrink: 0 }}>
               {userAlias ? userAlias.charAt(0) : '?'}
             </div>
-            {userAlias || 'Usuario Desconectado'} {userRole ? `(${userRole})` : ''}
+            <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {userAlias || 'Usuario Conectado'} {userRole ? `(${userRole})` : ''}
+              </span>
+              {!userAlias && session?.user?.id && (
+                <button 
+                  onClick={() => loadUserDataAndLeads(session.user.id)}
+                  style={{ padding: '2px 6px', fontSize: '0.7rem', background: 'var(--accent-color)', color: '#fff', border: 'none', borderRadius: '4px', marginTop: '4px', cursor: 'pointer', width: 'fit-content' }}
+                >
+                  🔄 Sincronizar
+                </button>
+              )}
+            </div>
           </div>
           <button onClick={handleLogout} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', background: 'transparent', border: '1px solid var(--glass-border)', padding: '0.5rem', borderRadius: '8px', cursor: 'pointer', color: 'var(--text-primary)' }}>
             <LogOut size={16} /> Salir
