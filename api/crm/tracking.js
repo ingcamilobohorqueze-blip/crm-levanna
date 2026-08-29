@@ -121,11 +121,14 @@ export default async function handler(req, res) {
           }
         }
 
-        if (!validLeadId && clientName) {
+        if (!validLeadId && clientName && clientName.trim() !== '') {
+          const trimmedName = clientName.trim();
           const { data: nameMatch } = await supabase
             .from('leads_master')
             .select('id_lead, comercial_asignado')
-            .eq('nombre_completo', clientName.trim());
+            .or(`nombre_completo.ilike.%${trimmedName}%,empresa.ilike.%${trimmedName}%`)
+            .order('created_at', { ascending: false })
+            .limit(1);
 
           if (nameMatch && nameMatch.length > 0) {
             validLeadId = nameMatch[0].id_lead;
