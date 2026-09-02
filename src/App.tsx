@@ -42,10 +42,13 @@ function Login() {
     setLoading(true);
     setError('');
     
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+    
+    const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password: cleanPassword });
     
     if (error) {
-      setError(error.message);
+      setError(error.message === 'Invalid login credentials' ? 'Credenciales incorrectas. Verifica tu correo y contraseña.' : error.message);
       setLoading(false);
     } else {
       navigate('/dashboard');
@@ -181,13 +184,23 @@ function Dashboard() {
         };
 
         // 1. Cargar perfil del usuario comercial
-        const userRes: any = await queryWithTimeout(
+        let userRes: any = await queryWithTimeout(
           supabase
             .from('usuarios_comerciales')
-            .select('rol, nombre')
+            .select('rol, nombre, id_usuario')
             .eq('id_usuario', userId)
             .maybeSingle()
         ).catch(() => ({ data: null }));
+
+        if (!userRes?.data && session?.user?.email) {
+          userRes = await queryWithTimeout(
+            supabase
+              .from('usuarios_comerciales')
+              .select('rol, nombre, id_usuario')
+              .eq('email', session.user.email)
+              .maybeSingle()
+          ).catch(() => ({ data: null }));
+        }
 
         if (userRes?.data) {
           setUserRole(userRes.data.rol);
@@ -195,6 +208,9 @@ function Dashboard() {
           if (userRes.data.rol === 'admin') {
             setActiveTab('admin');
           }
+        } else if (session?.user?.email) {
+          setUserRole('asesor');
+          setUserAlias(session.user.email.split('@')[0]);
         }
 
         // 2. Cargar asesores
