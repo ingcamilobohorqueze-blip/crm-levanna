@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { supabase } from './lib/supabase';
-import { Bell, Search, MessageCircle, Mail, LayoutDashboard, Users, Settings, LogOut, Briefcase, Plus, X, BarChart3, Copy, BookOpen, Edit2, Link, UserPlus, Share2, ChevronDown, Filter } from 'lucide-react';
+import { Bell, Search, MessageCircle, Mail, LayoutDashboard, Users, Settings, LogOut, Briefcase, Plus, X, BarChart3, Copy, BookOpen, Edit2, Link, UserPlus, Share2, ChevronDown, Filter, Menu } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { PlaybookReader } from './components/PlaybookReader';
@@ -107,6 +107,8 @@ function Dashboard() {
   const [userRole, setUserRole] = useState<'admin' | 'asesor' | null>(null);
   const [userAlias, setUserAlias] = useState('');
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [showSlowLoadingFallback, setShowSlowLoadingFallback] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   const [activeTab, setActiveTab] = useState<'bandeja'|'admin'|'todos'|'playbook'>('bandeja');
   const [leads, setLeads] = useState<any[]>([]);
@@ -165,51 +167,58 @@ function Dashboard() {
   // Telemetría & Alertas Realtime Presentación Premium
   const [livePitchAlert, setLivePitchAlert] = useState<{ clientName: string; leadId: string; note: string; phone?: string } | null>(null);
 
-  const loadUserDataAndLeads = async (userId: string, retries = 2) => {
+  const loadUserDataAndLeads = async (userId: string, retries = 1) => {
     let attempt = 0;
     while (attempt <= retries) {
       try {
+        const queryWithTimeout = async <T,>(promiseLike: PromiseLike<T>, timeoutMs = 3500): Promise<T> => {
+          let timer: any;
+          const promise = Promise.resolve(promiseLike);
+          const timeoutPromise = new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('Query timeout')), timeoutMs);
+          });
+          return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+        };
+
         // 1. Cargar perfil del usuario comercial
-        const { data: userData, error: userErr } = await supabase
-          .from('usuarios_comerciales')
-          .select('rol, nombre')
-          .eq('id_usuario', userId)
-          .maybeSingle();
+        const userRes: any = await queryWithTimeout(
+          supabase
+            .from('usuarios_comerciales')
+            .select('rol, nombre')
+            .eq('id_usuario', userId)
+            .maybeSingle()
+        ).catch(() => ({ data: null }));
 
-        if (userErr) {
-          console.warn(`Intento ${attempt + 1}: Error al consultar usuario (${userErr.message})`);
-          if (attempt < retries) {
-            await new Promise(r => setTimeout(r, 600));
-            attempt++;
-            continue;
-          }
-        }
-
-        if (userData) {
-          setUserRole(userData.rol);
-          setUserAlias(userData.nombre);
-          if (userData.rol === 'admin') {
+        if (userRes?.data) {
+          setUserRole(userRes.data.rol);
+          setUserAlias(userRes.data.nombre);
+          if (userRes.data.rol === 'admin') {
             setActiveTab('admin');
           }
         }
 
         // 2. Cargar asesores
-        const { data: asesoresData } = await supabase
-          .from('usuarios_comerciales')
-          .select('*')
-          .eq('activo', true);
-        if (asesoresData) setAsesores(asesoresData);
+        const asesoresRes: any = await queryWithTimeout(
+          supabase
+            .from('usuarios_comerciales')
+            .select('*')
+            .eq('activo', true)
+        ).catch(() => ({ data: null }));
+
+        if (asesoresRes?.data) setAsesores(asesoresRes.data);
 
         // 3. Cargar leads
-        const { data: leadsData } = await supabase
-          .from('leads_master')
-          .select(`*, usuarios_comerciales(nombre)`)
-          .order('created_at', { ascending: false });
+        const leadsRes: any = await queryWithTimeout(
+          supabase
+            .from('leads_master')
+            .select(`*, usuarios_comerciales(nombre)`)
+            .order('created_at', { ascending: false })
+        ).catch(() => ({ data: null }));
 
-        if (leadsData) {
-          setLeads(leadsData);
-          if (leadsData.length > 0) {
-            setSelectedLead((prev: any) => prev || leadsData[0]);
+        if (leadsRes?.data) {
+          setLeads(leadsRes.data);
+          if (leadsRes.data.length > 0) {
+            setSelectedLead((prev: any) => prev || leadsRes.data[0]);
           }
         }
 
@@ -217,7 +226,7 @@ function Dashboard() {
       } catch (err) {
         console.error(`Excepción en loadUserDataAndLeads (intento ${attempt + 1}):`, err);
         if (attempt < retries) {
-          await new Promise(r => setTimeout(r, 600));
+          await new Promise(r => setTimeout(r, 500));
           attempt++;
         } else {
           break;
@@ -228,6 +237,18 @@ function Dashboard() {
 
   useEffect(() => {
     let isMounted = true;
+
+    // Safety timeout: forzar fin de pantalla de carga en máximo 4.5 segundos
+    const safetyTimer = setTimeout(() => {
+      if (isMounted && loadingAuth) {
+        console.warn('Safety timer alcanzado: forzando fin de carga inicial de autenticación.');
+        setLoadingAuth(false);
+      }
+    }, 4500);
+
+    const slowTimer = setTimeout(() => {
+      if (isMounted) setShowSlowLoadingFallback(true);
+    }, 2500);
 
     const initSession = async () => {
       try {
@@ -273,6 +294,8 @@ function Dashboard() {
 
     return () => {
       isMounted = false;
+      clearTimeout(safetyTimer);
+      clearTimeout(slowTimer);
       subscription.unsubscribe();
     };
   }, [navigate]);
@@ -737,10 +760,25 @@ function Dashboard() {
 
   if (loadingAuth) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: '1.2rem', background: 'var(--bg-primary)', color: '#fff' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', gap: '1.2rem', background: 'var(--bg-primary)', color: '#fff', padding: '1.5rem', textAlign: 'center' }}>
         <img src="/logo-white.png" alt="CRM Logo" style={{ width: '70px', height: 'auto', objectFit: 'contain' }} onError={(e) => e.currentTarget.src = '/logo-blue.png'} />
         <div style={{ width: '36px', height: '36px', border: '3px solid rgba(255,255,255,0.1)', borderTopColor: 'var(--accent-color)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', fontWeight: 500 }}>Iniciando sesión y cargando CRM...</p>
+
+        {showSlowLoadingFallback && (
+          <div className="animate-fade-in" style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
+            <p style={{ fontSize: '0.8rem', color: '#94a3b8' }}>¿La conexión está tardando más de lo esperado?</p>
+            <button 
+              onClick={() => {
+                setLoadingAuth(false);
+                navigate('/login');
+              }}
+              style={{ background: 'var(--bg-secondary)', color: 'var(--accent-color)', border: '1px solid var(--glass-border)', padding: '0.5rem 1rem', borderRadius: '8px', fontSize: '0.85rem' }}
+            >
+              🔒 Ir a Iniciar Sesión / Reintentar
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -749,33 +787,70 @@ function Dashboard() {
 
   return (
     <div className="app-container">
+      {/* Mobile Top Bar */}
+      <header className="mobile-header">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <button 
+            className="mobile-menu-btn" 
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            aria-label="Abrir menú"
+          >
+            {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+          <img src="/logo-white.png" alt="CRM Logo" style={{ width: '28px', height: '28px', objectFit: 'contain' }} onError={(e) => e.currentTarget.src = '/logo-blue.png'} />
+          <span style={{ fontWeight: 600, fontSize: '1rem' }}>CRM Levanna</span>
+        </div>
+        
+        <button 
+          onClick={openInjectModal}
+          style={{ background: 'var(--accent-color)', color: '#fff', border: 'none', padding: '0.4rem 0.75rem', borderRadius: '6px', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+        >
+          <Plus size={14} /> Lead
+        </button>
+      </header>
+
+      {/* Mobile Overlay Backdrop */}
+      {isMobileMenuOpen && (
+        <div 
+          className="mobile-overlay" 
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="sidebar">
-        <div style={{ padding: '2rem 1.5rem', borderBottom: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <img src="/logo-white.png" alt="CRM Logo" style={{ width: '40px', height: '40px', objectFit: 'contain' }} onError={(e) => e.currentTarget.src = '/logo-blue.png'} />
-          <h2 style={{ color: 'var(--text-primary)', margin: 0, fontSize: '1.2rem' }}>CRM Levanna</h2>
+      <aside className={`sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+        <div style={{ padding: '2rem 1.5rem', borderBottom: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <img src="/logo-white.png" alt="CRM Logo" style={{ width: '40px', height: '40px', objectFit: 'contain' }} onError={(e) => e.currentTarget.src = '/logo-blue.png'} />
+            <h2 style={{ color: 'var(--text-primary)', margin: 0, fontSize: '1.2rem' }}>CRM Levanna</h2>
+          </div>
+          {isMobileMenuOpen && (
+            <button onClick={() => setIsMobileMenuOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', padding: '0.2rem' }}>
+              <X size={20} />
+            </button>
+          )}
         </div>
         
         <nav style={{ padding: '1.5rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1 }}>
-          <a href="#" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', background: activeTab === 'bandeja' ? 'var(--accent-color)' : 'transparent', color: activeTab === 'bandeja' ? '#fff' : 'var(--text-secondary)' }} onClick={(e) => { e.preventDefault(); setActiveTab('bandeja'); }}>
+          <a href="#" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', background: activeTab === 'bandeja' ? 'var(--accent-color)' : 'transparent', color: activeTab === 'bandeja' ? '#fff' : 'var(--text-secondary)' }} onClick={(e) => { e.preventDefault(); setActiveTab('bandeja'); setIsMobileMenuOpen(false); }}>
             <LayoutDashboard size={20} /> Bandeja (Asesor)
           </a>
           
           {userRole === 'admin' && (
-            <a href="#" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', background: activeTab === 'admin' ? 'var(--accent-color)' : 'transparent', color: activeTab === 'admin' ? '#fff' : 'var(--text-secondary)' }} onClick={(e) => { e.preventDefault(); setActiveTab('admin'); }}>
+            <a href="#" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', background: activeTab === 'admin' ? 'var(--accent-color)' : 'transparent', color: activeTab === 'admin' ? '#fff' : 'var(--text-secondary)' }} onClick={(e) => { e.preventDefault(); setActiveTab('admin'); setIsMobileMenuOpen(false); }}>
               <BarChart3 size={20} /> Dashboard Global
             </a>
           )}
           
-          <a href="#" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', background: activeTab === 'todos' ? 'var(--accent-color)' : 'transparent', color: activeTab === 'todos' ? '#fff' : 'var(--text-secondary)' }} onClick={(e) => { e.preventDefault(); setActiveTab('todos'); }}>
+          <a href="#" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', background: activeTab === 'todos' ? 'var(--accent-color)' : 'transparent', color: activeTab === 'todos' ? '#fff' : 'var(--text-secondary)' }} onClick={(e) => { e.preventDefault(); setActiveTab('todos'); setIsMobileMenuOpen(false); }}>
             <Users size={20} /> Todos los Clientes
           </a>
           
-          <a href="#" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', background: activeTab === 'playbook' ? 'var(--accent-color)' : 'transparent', color: activeTab === 'playbook' ? '#fff' : 'var(--text-secondary)' }} onClick={(e) => { e.preventDefault(); setActiveTab('playbook'); }}>
+          <a href="#" style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', background: activeTab === 'playbook' ? 'var(--accent-color)' : 'transparent', color: activeTab === 'playbook' ? '#fff' : 'var(--text-secondary)' }} onClick={(e) => { e.preventDefault(); setActiveTab('playbook'); setIsMobileMenuOpen(false); }}>
             <BookOpen size={20} /> 📖 Playbook Comercial
           </a>
 
-          <a href="#" onClick={(e) => { e.preventDefault(); setShowLibraryModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', color: 'var(--text-secondary)' }}>
+          <a href="#" onClick={(e) => { e.preventDefault(); setShowLibraryModal(true); setIsMobileMenuOpen(false); }} style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', borderRadius: '8px', color: 'var(--text-secondary)' }}>
             <BookOpen size={20} /> Biblioteca de Recursos
           </a>
         </nav>
@@ -1627,6 +1702,42 @@ function Dashboard() {
           </div>
         </div>
       )}
+      {/* Mobile Bottom Navigation Bar */}
+      <nav className="mobile-bottom-nav">
+        <button 
+          className={`mobile-nav-item ${activeTab === 'bandeja' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('bandeja'); setIsMobileMenuOpen(false); }}
+        >
+          <LayoutDashboard size={20} />
+          <span>Bandeja</span>
+        </button>
+
+        <button 
+          className={`mobile-nav-item ${activeTab === 'todos' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('todos'); setIsMobileMenuOpen(false); }}
+        >
+          <Users size={20} />
+          <span>Clientes</span>
+        </button>
+
+        {userRole === 'admin' && (
+          <button 
+            className={`mobile-nav-item ${activeTab === 'admin' ? 'active' : ''}`}
+            onClick={() => { setActiveTab('admin'); setIsMobileMenuOpen(false); }}
+          >
+            <BarChart3 size={20} />
+            <span>Admin</span>
+          </button>
+        )}
+
+        <button 
+          className={`mobile-nav-item ${activeTab === 'playbook' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('playbook'); setIsMobileMenuOpen(false); }}
+        >
+          <BookOpen size={20} />
+          <span>Playbook</span>
+        </button>
+      </nav>
     </div>
   );
 }

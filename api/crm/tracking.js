@@ -40,8 +40,21 @@ export default async function handler(req, res) {
       slideTitle,
       timeSpentSeconds,
       dataPayload,
-      timestamp
+      timestamp,
+      isDemo
     } = body || {};
+
+    const isDemoSession = Boolean(
+      isDemo ||
+      !prospectId ||
+      (typeof prospectId === 'string' && prospectId.toLowerCase().includes('demo')) ||
+      !commercialId ||
+      commercialId === 'COM-DEMO' ||
+      !clientName ||
+      clientName.toLowerCase().includes('industria y la construcción') ||
+      clientName.toLowerCase().includes('prospecto web') ||
+      clientName.toLowerCase().includes('demo')
+    );
 
     const cliente = clientName || 'El cliente';
     const slide = slideTitle || `Diapositiva ${slideIndex ?? ''}`;
@@ -142,8 +155,8 @@ export default async function handler(req, res) {
       }
     }
 
-    // 3. AUTO-INYECCIÓN VÍA RPC upsert_lead: Si el lead no existe en el CRM, crearlo vía RPC con SECURITY DEFINER
-    if (!validLeadId) {
+    // 3. AUTO-INYECCIÓN VÍA RPC upsert_lead: Si el lead no existe en el CRM, crearlo vía RPC con SECURITY DEFINER (solo si NO es sesión demo)
+    if (!validLeadId && !isDemoSession) {
       try {
         const { data: upsertRes, error: upsertErr } = await supabase.rpc('upsert_lead', {
           p_nombre: clientName || 'Prospecto Web',
@@ -168,8 +181,8 @@ export default async function handler(req, res) {
       }
     }
 
-    // 4. Fallback final al lead más reciente si aún no se encuentra un leadId válido
-    if (!validLeadId) {
+    // 4. Fallback final al lead más reciente si aún no se encuentra un leadId válido (solo si NO es sesión demo)
+    if (!validLeadId && !isDemoSession) {
       try {
         const { data: fallbackLead } = await supabase
           .from('leads_master')
@@ -189,6 +202,14 @@ export default async function handler(req, res) {
     }
 
     if (!validLeadId) {
+      if (isDemoSession) {
+        console.log(`[CRM Tracking API] Evento demo '${eventType}' recibido y omitido sin crear lead.`);
+        return res.status(200).json({
+          success: true,
+          isDemo: true,
+          message: 'Evento de telemetría demo procesado sin inyección de lead.'
+        });
+      }
       return res.status(400).json({ error: 'No valid lead found to log telemetry' });
     }
 
