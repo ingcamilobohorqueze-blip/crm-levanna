@@ -1216,8 +1216,202 @@ function Dashboard() {
           </section>
         ) : (
           // Vista Bandeja / Admin (Split View)
-          <div style={{ display: 'grid', gridTemplateColumns: activeTab === 'admin' ? '1fr' : '1fr 1fr', gap: '1.5rem', flex: 1, minHeight: 0 }}>
-            {/* List Column */}
+          <div style={{ display: 'grid', gridTemplateColumns: activeTab === 'admin' ? '1fr' : '1fr minmax(280px, 340px)', gap: '1.5rem', flex: 1, minHeight: 0 }}>
+            {/* Detail Column (Panel Principal: Cliente + Herramientas + Línea de Tiempo) */}
+            {activeTab === 'bandeja' && (
+              <section className="glass-panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
+                {selectedLead ? (
+                  <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                    
+                    {/* Tarjeta de Información del Cliente + Herramientas Integradas */}
+                    <div className="glass-card" style={{ padding: '1.25rem' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', alignItems: 'start' }}>
+                        
+                        {/* Datos del Cliente */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.5rem' }}>
+                            <div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
+                                <h2 style={{ fontSize: '1.6rem', margin: 0 }}>{selectedLead.nombre_completo}</h2>
+                                <button 
+                                  onClick={() => { setEditFormData({ nombre_completo: selectedLead.nombre_completo, empresa: selectedLead.empresa || '', telefono_whatsapp: selectedLead.telefono_whatsapp || '', correo_electronico: selectedLead.correo_electronico || '' }); setShowEditModal(true); }} 
+                                  style={{ background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', padding: '0.3rem', borderRadius: '6px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                                  title="Editar información"
+                                >
+                                  <Edit2 size={15} />
+                                </button>
+                              </div>
+                              <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', margin: 0 }}>{selectedLead.empresa || 'Individual / Sin empresa'}</p>
+                            </div>
+                            
+                            {/* Selector de Estado */}
+                            <div style={{ position: 'relative' }}>
+                              {(() => {
+                                const currentOpt = STATUS_OPTIONS.find(o => o.value === selectedLead.estado_comercial) || STATUS_OPTIONS[0];
+                                return (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setShowStatusMenu(!showStatusMenu);
+                                      }}
+                                      style={{
+                                        padding: '0.45rem 0.85rem',
+                                        fontSize: '0.8rem',
+                                        fontWeight: 700,
+                                        background: currentOpt.bg,
+                                        color: currentOpt.color,
+                                        border: `1px solid ${currentOpt.border}`,
+                                        borderRadius: '8px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '0.4rem',
+                                        cursor: 'pointer',
+                                        whiteSpace: 'nowrap'
+                                      }}
+                                    >
+                                      {currentOpt.label} <ChevronDown size={14} />
+                                    </button>
+
+                                    {showStatusMenu && (
+                                      <div
+                                        onClick={(e) => e.stopPropagation()}
+                                        style={{
+                                          position: 'absolute',
+                                          top: '115%',
+                                          right: 0,
+                                          width: '220px',
+                                          backgroundColor: '#0f172a',
+                                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                                          borderRadius: '10px',
+                                          boxShadow: '0 20px 40px rgba(0,0,0,0.8)',
+                                          zIndex: 100,
+                                          padding: '0.4rem 0'
+                                        }}
+                                      >
+                                        {STATUS_OPTIONS.map(opt => (
+                                          <div
+                                            key={opt.value}
+                                            onClick={() => {
+                                              handleStatusChange(opt.value);
+                                              setShowStatusMenu(false);
+                                            }}
+                                            style={{
+                                              padding: '0.65rem 1rem',
+                                              fontSize: '0.85rem',
+                                              fontWeight: selectedLead.estado_comercial === opt.value ? 700 : 500,
+                                              color: opt.color,
+                                              backgroundColor: selectedLead.estado_comercial === opt.value ? 'rgba(255, 255, 255, 0.12)' : 'transparent',
+                                              cursor: 'pointer',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: '0.5rem',
+                                              transition: 'background 0.15s ease'
+                                            }}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedLead.estado_comercial === opt.value ? 'rgba(255, 255, 255, 0.12)' : 'transparent'}
+                                          >
+                                            {opt.label}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                            <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                              <p style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '0.2rem', fontWeight: 600 }}>Teléfono</p>
+                              <p style={{ margin: 0, fontWeight: 500, fontSize: '0.85rem' }}>{selectedLead.telefono_whatsapp || '-'}</p>
+                            </div>
+                            <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                              <p style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '0.2rem', fontWeight: 600 }}>Correo</p>
+                              <p style={{ margin: 0, fontWeight: 500, fontSize: '0.85rem', wordBreak: 'break-all' }}>{selectedLead.correo_electronico || '-'}</p>
+                            </div>
+                            <div style={{ background: 'rgba(15, 23, 42, 0.5)', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--glass-border)', gridColumn: '1 / -1' }}>
+                              <p style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 600 }}>Dolor Identificado</p>
+                              <p style={{ margin: 0, lineHeight: 1.4, fontSize: '0.85rem' }}>{selectedLead.dolor_identificado || 'Ingresó por Presentación Premium'}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Herramientas de Acción Comercial */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', justifyContent: 'center' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                            <button onClick={() => handleWhatsApp(selectedLead)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', backgroundColor: '#25D366', color: '#fff', border: 'none', padding: '0.65rem 0.5rem', borderRadius: '6px', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer' }}>
+                              <MessageCircle size={16} /> Chat WhatsApp
+                            </button>
+                            <button onClick={() => handleSendProposal(selectedLead)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', backgroundColor: 'var(--accent-color)', color: '#fff', border: 'none', padding: '0.65rem 0.5rem', borderRadius: '6px', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer' }}>
+                              <Share2 size={16} /> Enviar Cotización Directa
+                            </button>
+                          </div>
+                          <button onClick={() => handleSendPitchPresentation(selectedLead)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', backgroundColor: '#e11d48', color: '#fff', border: 'none', padding: '0.65rem 0.5rem', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem', boxShadow: '0 4px 12px rgba(225, 29, 72, 0.25)' }}>
+                            <Share2 size={16} /> 🔥 Enviar Presentación Premium
+                          </button>
+                          <button onClick={() => openCotizadorHub(selectedLead)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#93c5fd', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '0.55rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}>
+                            <Settings size={15} /> ⚙️ Personalizar en Cotizador Hub (Asesor)
+                          </button>
+                          <button onClick={() => setShowTemplatesModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', backgroundColor: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', padding: '0.55rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.8rem' }}>
+                            <Mail size={15} /> Plantillas de Correo
+                          </button>
+                          <button onClick={() => setActiveTab('playbook')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem', backgroundColor: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)', padding: '0.55rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}>
+                            <BookOpen size={15} /> 📖 Consultar Playbook & Objeciones
+                          </button>
+                        </div>
+
+                      </div>
+                    </div>
+
+                    {/* Sección Línea de Tiempo */}
+                    <div>
+                      <h3 style={{ marginBottom: '1rem', fontSize: '1.25rem' }}>Línea de Tiempo</h3>
+                      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+                        <input 
+                          type="text" 
+                          value={newNote}
+                          onChange={(e) => setNewNote(e.target.value)}
+                          placeholder="Agregar nota sobre el cliente..." 
+                          style={{ flex: 1, padding: '0.65rem 1rem' }}
+                          onKeyPress={(e) => e.key === 'Enter' && handleAddNote()}
+                        />
+                        <button onClick={handleAddNote} style={{ padding: '0.65rem 1.2rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Plus size={20} /></button>
+                      </div>
+
+                      <div style={{ borderLeft: '2px solid var(--glass-border)', marginLeft: '0.5rem', paddingLeft: '1.5rem', position: 'relative' }}>
+                        {timeline.map((event: any) => (
+                          <div key={event.id_interaccion} style={{ position: 'relative', marginBottom: '1.5rem' }}>
+                            <div style={{ position: 'absolute', left: '-1.85rem', top: '0.2rem', width: '12px', height: '12px', borderRadius: '50%', background: 'var(--glass-border)', border: '2px solid var(--bg-primary)' }}></div>
+                            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
+                              {formatDistanceToNow(new Date(event.created_at), { addSuffix: true, locale: es })}
+                            </p>
+                            <p style={{ margin: 0, fontSize: '0.95rem' }}><strong>{event.tipo_accion}:</strong> {event.nota}</p>
+                          </div>
+                        ))}
+                        
+                        <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
+                          <div style={{ position: 'absolute', left: '-1.85rem', top: '0.2rem', width: '12px', height: '12px', borderRadius: '50%', background: 'var(--accent-color)', border: '2px solid var(--bg-primary)' }}></div>
+                          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
+                            {format(new Date(selectedLead.created_at), "dd MMM yyyy", { locale: es })}
+                          </p>
+                          <p style={{ margin: 0, fontSize: '0.95rem' }}>Lead ingresó al sistema.</p>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)' }}>
+                    <p>Selecciona un lead para ver los detalles.</p>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* List Column (Bandeja Priorizada a la derecha) */}
             <section className="glass-panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
               <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--glass-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0 }}>{activeTab === 'admin' ? 'Gestión de Leads' : 'Bandeja Priorizada'}</h3>
@@ -1265,184 +1459,6 @@ function Dashboard() {
                 ))}
               </div>
             </section>
-
-            {/* Detail Column */}
-            {activeTab === 'bandeja' && (
-            <section className="glass-panel" style={{ display: 'flex', flexDirection: 'column', overflow: 'auto' }}>
-              {selectedLead ? (
-                <div className="animate-fade-in">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem' }}>
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-                        <h2 style={{ fontSize: '1.8rem', margin: 0 }}>{selectedLead.nombre_completo}</h2>
-                        <button 
-                          onClick={() => { setEditFormData({ nombre_completo: selectedLead.nombre_completo, empresa: selectedLead.empresa || '', telefono_whatsapp: selectedLead.telefono_whatsapp || '', correo_electronico: selectedLead.correo_electronico || '' }); setShowEditModal(true); }} 
-                          style={{ background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--text-secondary)', padding: '0.4rem', borderRadius: '6px', display: 'flex', alignItems: 'center', cursor: 'pointer' }}
-                          title="Editar información"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                      </div>
-                      <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem', margin: 0 }}>{selectedLead.empresa || 'Individual / Sin empresa'}</p>
-                    </div>
-                    
-                    {/* Custom Status Dropdown Menu (Evita errores de estilo nativo del navegador) */}
-                    <div style={{ position: 'relative' }}>
-                      {(() => {
-                        const currentOpt = STATUS_OPTIONS.find(o => o.value === selectedLead.estado_comercial) || STATUS_OPTIONS[0];
-                        return (
-                          <>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setShowStatusMenu(!showStatusMenu);
-                              }}
-                              style={{
-                                padding: '0.5rem 1rem',
-                                fontSize: '0.875rem',
-                                fontWeight: 700,
-                                background: currentOpt.bg,
-                                color: currentOpt.color,
-                                border: `1px solid ${currentOpt.border}`,
-                                borderRadius: '8px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.5rem',
-                                cursor: 'pointer'
-                              }}
-                            >
-                              {currentOpt.label} <ChevronDown size={16} />
-                            </button>
-
-                            {showStatusMenu && (
-                              <div
-                                onClick={(e) => e.stopPropagation()}
-                                style={{
-                                  position: 'absolute',
-                                  top: '115%',
-                                  right: 0,
-                                  width: '220px',
-                                  backgroundColor: '#0f172a',
-                                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                                  borderRadius: '10px',
-                                  boxShadow: '0 20px 40px rgba(0,0,0,0.8)',
-                                  zIndex: 100,
-                                  padding: '0.4rem 0'
-                                }}
-                              >
-                                {STATUS_OPTIONS.map(opt => (
-                                  <div
-                                    key={opt.value}
-                                    onClick={() => {
-                                      handleStatusChange(opt.value);
-                                      setShowStatusMenu(false);
-                                    }}
-                                    style={{
-                                      padding: '0.65rem 1rem',
-                                      fontSize: '0.875rem',
-                                      fontWeight: selectedLead.estado_comercial === opt.value ? 700 : 500,
-                                      color: opt.color,
-                                      backgroundColor: selectedLead.estado_comercial === opt.value ? 'rgba(255, 255, 255, 0.12)' : 'transparent',
-                                      cursor: 'pointer',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: '0.5rem',
-                                      transition: 'background 0.15s ease'
-                                    }}
-                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedLead.estado_comercial === opt.value ? 'rgba(255, 255, 255, 0.12)' : 'transparent'}
-                                  >
-                                    {opt.label}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '2rem' }}>
-                    <div className="glass-card" style={{ padding: '1rem' }}>
-                      <p style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 600 }}>Teléfono</p>
-                      <p style={{ margin: 0, fontWeight: 500 }}>{selectedLead.telefono_whatsapp}</p>
-                    </div>
-                    <div className="glass-card" style={{ padding: '1rem' }}>
-                      <p style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 600 }}>Correo</p>
-                      <p style={{ margin: 0, fontWeight: 500, wordBreak: 'break-all' }}>{selectedLead.correo_electronico}</p>
-                    </div>
-                    <div className="glass-card" style={{ padding: '1rem', gridColumn: '1 / -1' }}>
-                      <p style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '0.5rem', fontWeight: 600 }}>Dolor Identificado</p>
-                      <p style={{ margin: 0, lineHeight: 1.6 }}>{selectedLead.dolor_identificado}</p>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '2rem' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                      <button onClick={() => handleWhatsApp(selectedLead)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: '#25D366', color: '#fff', border: 'none', padding: '0.75rem', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
-                        <MessageCircle size={18} /> Chat WhatsApp
-                      </button>
-                      <button onClick={() => handleSendProposal(selectedLead)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'var(--accent-color)', color: '#fff', border: 'none', padding: '0.75rem', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
-                        <Share2 size={18} /> Enviar Cotización Directa
-                      </button>
-                    </div>
-                    <button onClick={() => handleSendPitchPresentation(selectedLead)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: '#e11d48', color: '#fff', border: 'none', padding: '0.75rem', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', fontSize: '0.95rem', boxShadow: '0 4px 12px rgba(225, 29, 72, 0.25)' }}>
-                      <Share2 size={18} /> 🔥 Enviar Presentación Premium
-                    </button>
-                    <button onClick={() => openCotizadorHub(selectedLead)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#93c5fd', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '0.65rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem' }}>
-                      <Settings size={16} /> ⚙️ Personalizar en Cotizador Hub (Asesor)
-                    </button>
-                    <button onClick={() => setShowTemplatesModal(true)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)', border: '1px solid var(--glass-border)', padding: '0.6rem', borderRadius: '6px', cursor: 'pointer', fontSize: '0.875rem' }}>
-                      <Mail size={16} /> Plantillas de Correo
-                    </button>
-                    <button onClick={() => setActiveTab('playbook')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', backgroundColor: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)', padding: '0.65rem', borderRadius: '6px', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem' }}>
-                      <BookOpen size={16} /> 📖 Consultar Playbook & Objeciones
-                    </button>
-                  </div>
-
-                  <h3 style={{ marginBottom: '1rem', fontSize: '1.2rem' }}>Línea de Tiempo</h3>
-                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
-                    <input 
-                      type="text" 
-                      value={newNote}
-                      onChange={(e) => setNewNote(e.target.value)}
-                      placeholder="Agregar nota sobre el cliente..." 
-                      style={{ flex: 1 }}
-                      onKeyPress={(e) => e.key === 'Enter' && handleAddNote()}
-                    />
-                    <button onClick={handleAddNote} style={{ padding: '0.6em' }}><Plus size={18} /></button>
-                  </div>
-
-                  <div style={{ borderLeft: '2px solid var(--glass-border)', marginLeft: '0.5rem', paddingLeft: '1.5rem', position: 'relative' }}>
-                    {timeline.map((event: any) => (
-                      <div key={event.id_interaccion} style={{ position: 'relative', marginBottom: '1.5rem' }}>
-                        <div style={{ position: 'absolute', left: '-1.85rem', top: '0.2rem', width: '12px', height: '12px', borderRadius: '50%', background: 'var(--glass-border)', border: '2px solid var(--bg-primary)' }}></div>
-                        <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
-                          {formatDistanceToNow(new Date(event.created_at), { addSuffix: true, locale: es })}
-                        </p>
-                        <p style={{ margin: 0 }}><strong>{event.tipo_accion}:</strong> {event.nota}</p>
-                      </div>
-                    ))}
-                    
-                    <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
-                      <div style={{ position: 'absolute', left: '-1.85rem', top: '0.2rem', width: '12px', height: '12px', borderRadius: '50%', background: 'var(--accent-color)', border: '2px solid var(--bg-primary)' }}></div>
-                      <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>
-                        {format(new Date(selectedLead.created_at), "dd MMM yyyy", { locale: es })}
-                      </p>
-                      <p style={{ margin: 0 }}>Lead ingresó al sistema.</p>
-                    </div>
-                  </div>
-
-                </div>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-secondary)' }}>
-                  <p>Selecciona un lead para ver los detalles.</p>
-                </div>
-              )}
-            </section>
-            )}
           </div>
         )}
       </main>
