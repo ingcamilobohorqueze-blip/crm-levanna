@@ -303,7 +303,7 @@ export const PlaybookReader: React.FC<PlaybookReaderProps> = ({ selectedLead, us
                 fontSize: '0.88rem',
                 color: '#fef08a'
               }}>
-                <strong>Venta Modular (Fallback):</strong> Si el cliente presenta restricción presupuestal severa o desea iniciar con una prueba piloto puntual, se deriva a la tarifa de venta modular individual aclarando la pérdida de sinergias transversales.
+                <strong>Arquitectura Multi-Tenant & Venta Cruzada (Fallback):</strong> Gracias a nuestra arquitectura Multi-Tenant, el cliente puede contratar desde 1 sola app hasta las 6 integradas <strong>sin pagar ningún Hub Base ($0 COP)</strong>. Si elige un módulo individual, el comercial debe hacer <strong>venta cruzada con la Bóveda Documental ($224.000/mes)</strong> explicando que amplía las capacidades de cada app con custodia probatoria permanente, haciendo que los Paquetes Comerciales sean la opción más rentable.
               </div>
             </div>
           </div>
@@ -411,7 +411,9 @@ export const PlaybookReader: React.FC<PlaybookReaderProps> = ({ selectedLead, us
                       <tr key={idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
                         <td style={{ padding: '0.75rem 1rem', fontWeight: 600, color: '#fff' }}>{mod.name}</td>
                         <td style={{ padding: '0.75rem 1rem', color: '#cbd5e1' }}>{mod.capacity}</td>
-                        <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold', color: '#60a5fa' }}>{formatCOP(mod.monthlyPrice)}</td>
+                        <td style={{ padding: '0.75rem 1rem', textAlign: 'right', fontWeight: 'bold', color: mod.monthlyPrice === 0 ? '#4ade80' : '#60a5fa' }}>
+                          {mod.monthlyPrice === 0 ? 'Incluido ($0 COP)' : formatCOP(mod.monthlyPrice)}
+                        </td>
                       </tr>
                     ))}
                   </tbody>

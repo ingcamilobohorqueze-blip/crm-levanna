@@ -108,9 +108,9 @@ export const BUNDLE_PACKAGES: BundlePackage[] = [
 ];
 
 export const MODULAR_PRICES: ModularService[] = [
-  { name: 'Hub Web de Integración (Base)', capacity: 'Ilimitadas Consultas', monthlyPrice: 252000 },
+  { name: 'Tenant Hub Multi-Tenant (Base del Ecosistema)', capacity: 'Incluido sin costo en 1 o todas las apps (Aislamiento RLS)', monthlyPrice: 0 },
+  { name: 'Levanna Vault (Bóveda Documental — Eje Cross-Sell)', capacity: '250 GB de Almacenamiento Base (Amplía capacidades de cada app)', monthlyPrice: 224000 },
   { name: 'Levanna Budget (Control Presupuestal)', capacity: 'Hasta 3 Proyectos Simultáneos', monthlyPrice: 264000 },
-  { name: 'Levanna Vault (Bóveda Documental)', capacity: '250 GB de Almacenamiento Base', monthlyPrice: 224000 },
   { name: 'Levanna Access (Control de Accesos QR)', capacity: 'Hasta 1.500 Usuarios Activos', monthlyPrice: 200000 },
   { name: 'Levanna Tender (Módulo Licitaciones IA)', capacity: '15 Licitaciones / 2.000 Páginas al mes', monthlyPrice: 408000 },
   { name: 'Levanna Meetings (Asistente Reuniones IA)', capacity: '30 Horas de Procesamiento al mes', monthlyPrice: 148000 },
