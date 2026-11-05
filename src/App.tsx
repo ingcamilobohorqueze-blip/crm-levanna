@@ -162,9 +162,10 @@ function Dashboard() {
   // Library State
   const [libraryLinks] = useState([
     { id: 1, title: 'Generador de propuestas', type: 'doc', url: 'https://levanna-tenant-hub-hub.vercel.app/cotizador_comercial.html' },
-    { id: 2, title: 'Presentación Premium (Pitch)', type: 'doc', url: 'https://levanna-tenant-hub-presentacion-pre.vercel.app/' },
-    { id: 3, title: 'Manejo de Objeciones', type: 'chat', url: '#' },
-    { id: 4, title: 'Carpeta Drive Completa', type: 'folder', url: '#' }
+    { id: 2, title: 'Presentación Base (Pitch en Frío)', type: 'doc', url: 'https://levanna-tenant-hub-presentacion-pre.vercel.app/?mode=base' },
+    { id: 3, title: 'Presentación Premium (Pitch Asesor)', type: 'doc', url: 'https://levanna-tenant-hub-presentacion-pre.vercel.app/?mode=premium' },
+    { id: 4, title: 'Manejo de Objeciones', type: 'chat', url: '#' },
+    { id: 5, title: 'Carpeta Drive Completa', type: 'folder', url: '#' }
   ]);
 
   // Telemetría & Alertas Realtime Presentación Premium
@@ -477,7 +478,12 @@ function Dashboard() {
     if (linkUrl.includes('presentacion-pre.vercel.app')) {
       const advisorData = asesores.find(a => a.id_usuario === currentAdvisorId);
       const calLink = advisorData?.cal_link || 'https://cal.com/emmanuel-arias-vafucp/15min?overlayCalendar=true';
-      trackableUrl = `https://levanna-tenant-hub-presentacion-pre.vercel.app/?client=${encodeURIComponent(clientName)}&commercial=${encodeURIComponent(currentAdvisorName)}&commercialId=${encodeURIComponent(currentAdvisorId)}&prospectId=${encodeURIComponent(prospectId)}&calLink=${encodeURIComponent(calLink)}`;
+      const advisorPhone = advisorData?.telefono_whatsapp || advisorData?.telefono || advisorData?.phone || '573015568984';
+      
+      const isBase = linkUrl.includes('mode=base') || linkTitle.toLowerCase().includes('base') || linkTitle.toLowerCase().includes('frío') || linkTitle.toLowerCase().includes('frio');
+      const modeParam = isBase ? 'mode=base' : 'mode=premium';
+      
+      trackableUrl = `https://levanna-tenant-hub-presentacion-pre.vercel.app/?${modeParam}&client=${encodeURIComponent(clientName)}&commercial=${encodeURIComponent(currentAdvisorName)}&commercialId=${encodeURIComponent(currentAdvisorId)}&prospectId=${encodeURIComponent(prospectId)}&phone=${encodeURIComponent(advisorPhone)}&calLink=${encodeURIComponent(calLink)}`;
     } else {
       const separator = linkUrl.includes('?') ? '&' : '?';
       trackableUrl = `${linkUrl}${separator}ref_asesor=${currentAdvisorId}&asesor=${encodeURIComponent(currentAdvisorName)}&origen=Cotizador_Propuesta`;
@@ -657,8 +663,9 @@ function Dashboard() {
 
     const advisorData = asesores.find(a => a.id_usuario === currentAdvisorId);
     const calLink = advisorData?.cal_link || 'https://cal.com/emmanuel-arias-vafucp/15min?overlayCalendar=true';
+    const advisorPhone = advisorData?.telefono_whatsapp || advisorData?.telefono || advisorData?.phone || '573015568984';
 
-    const pitchUrl = `https://levanna-tenant-hub-presentacion-pre.vercel.app/?client=${encodeURIComponent(clientName)}&commercial=${encodeURIComponent(currentAdvisorName)}&commercialId=${encodeURIComponent(currentAdvisorId)}&prospectId=${encodeURIComponent(lead.id_lead)}&calLink=${encodeURIComponent(calLink)}`;
+    const pitchUrl = `https://levanna-tenant-hub-presentacion-pre.vercel.app/?mode=premium&client=${encodeURIComponent(clientName)}&commercial=${encodeURIComponent(currentAdvisorName)}&commercialId=${encodeURIComponent(currentAdvisorId)}&prospectId=${encodeURIComponent(lead.id_lead)}&phone=${encodeURIComponent(advisorPhone)}&calLink=${encodeURIComponent(calLink)}`;
 
     const message = `Hola ${lead.nombre_completo}, te comparto nuestra Presentación Premium interactiva de Levanna DC para ${clientName}:\n\n${pitchUrl}\n\nQuedo atento a tus comentarios para cualquier inquietud.`;
     
